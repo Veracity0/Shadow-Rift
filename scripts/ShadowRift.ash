@@ -128,7 +128,7 @@ location ingress_to_location(string ingress)
     return rift_name[ingress].to_location();
 }
 
-static string[string] rift_items = {
+static string[location] rift_items = {
     $location[ Shadow Rift (The 8-Bit Realm)] : "shadow ice, shadow fluid, shadow glass",
     $location[ Shadow Rift (Desert Beach)] : "shadow flame, shadow fluid, shadow sinew",
     $location[ Shadow Rift (Somewhere Over the Beanstalk)] : "shadow fluid, shadow glass, shadow nectar",
@@ -203,6 +203,10 @@ void main(string parameters)
 	    case "resistance":
 		labyrinth_goal = keyword;
 	    	break;
+	    case "default":
+		// Use this if you want to use whatever your configured
+		// properties are without being nagged.
+		break;
 	    default:
 		abort("Unrecognized keyword: " + keyword);
 	    }
@@ -238,12 +242,12 @@ void main(string parameters)
     }
     print("You want to enter " + rift_name[rift_ingress] + ".");
 
-    // Choose the rift you will enter.
+    // Choose the rift you will actually enter.
     location rift = ingress_to_location(rift_ingress);
-    string rift_name = rift.to_string();
     if (rift_ingress == "random") {
-	print("We chose " + rift_name + " for you.");
+	print("We chose " + rift.to_string() + " for you.");
     }
+    print("You will find the following items there: " + rift_items[rift]);
 
     // If the goal is "entity", the boss replaces the Shadow Labyrinth.
     // If the goal is "artifact", automation will find it in the Shadow Labyrinth.
@@ -252,42 +256,9 @@ void main(string parameters)
 	set_property("shadowLabyrinthGoal", labyrinth_goal);
     }
 
-    void adventure_once()
-    {
-	// If we are visiting a new rift, we must go through place.php.
-	// That is the url associated with the location we are using.
-	// This will redirect to adventure.php
-	//
-	// Subsequent requests can go straight to adventure.php
-	// If we used adventure or adv1, it would do that.
-	//
-	// However, we don't want KoLmafia to automate combat for us.
-	// We'll do that ourself.
-
-	if (rift_ingress != get_property("shadowRiftIngress")) {
-	    catch visit_url( rift.to_url() );
-	}
-	rift = SHADOW_RIFT;
-
-	string page = visit_url( rift.to_url() );
-	if ( page.contains_text( "fight.php" ) ) {
-	    // Your CCS had better be set up to handle this!
-	    run_combat();
-	    return;
-	}
-	if ( page.contains_text( "choice.php" ) ) {
-	    // Take the default choice as configured in shadowLabyrinthGoal.
-	    // This will get the artifact if you are getting one for Rufus
-	    run_choice(-1);
-	    return;
-	}
-	// What is this?
-    }
-
     void collect_reward()
     {
-    	string url = rift.to_url();
-	string page = visit_url( url );
+	string page = visit_url( SHADOW_RIFT.to_url() );
 	if ( page.contains_text( "choice.php" ) ) {
 	    int option = reward_option[quest_reward];
 	    // You can only get the forest once per day.
@@ -314,34 +285,50 @@ void main(string parameters)
 
     print("You accepted an '" + get_property("rufusQuestType") + "' quest to get " + get_property("rufusQuestTarget"));
 
+    void adventure_once()
+    {
+	// The first time you go through the rift to The 8-bit Realm,
+	// we will equip the continuum transfunctioner. Subsequent
+	// adventures do not need it, so restore item drop outfit.
+	try {
+	    cli_execute( "checkpoint" );
+	    adv1(rift, 0);
+	} finally {
+	    cli_execute( "outfit checkpoint" );
+	}
+    }
+
     try {
 	cli_execute( "checkpoint" );
-	// use_familiar(fam);
+	// Use an item drop familiar?
 	maximize("Item Drop, -equip broken champagne bottle", false);
 
-	// If we have Shadow Affinity, get Steely-Eyed Squint, which
-	// doubles Item Drop bonuses for one turn. 
-	if (have_effect(SHADOW_AFFINITY) > 0 &&
+	int affinity_turns = have_effect(SHADOW_AFFINITY);
+	boolean free_turns_only = affinity_turns > 0;
+
+	// If we are using only free turns, get Steely-Eyed Squint,
+	// which doubles Item Drop bonuses for one turn.
+	if (free_turns_only &&
 	    have_skill(STEELY_EYED_SQUINT) &&
 	    !get_property("_steelyEyedSquintUsed").to_boolean()) {
-	    // use_skill(1, STEELY_EYED_SQUINT);
+	    use_skill(1, STEELY_EYED_SQUINT);
 	}
 
-	while (get_property("questRufus") == "started") {
-	    // The first time you go through the rift to The 8-bit Realm,
-	    // We will equip the continuum transfunctioner. Subsequent
-	    // adventures do not need it, so restore item drop outfit.
-	    try {
-		cli_execute( "checkpoint" );
-		adventure_once();
-	    } finally {
-		cli_execute( "outfit checkpoint" );
-	    }
+	while (get_property("encountersUntilSRChoice") > 0) {
+	    adventure_once();
 	}
+
+	if (quest_goal == "entity") {
+	    // *** Do special prep here?
+	}
+
+	// Fight the boss or traverse the Shadow Labyrinth
+	adventure_once();
 
 	if (get_property("questRufus") != "step1") {
-	    // This is unexpected. Perhaps you didn't have enough items
-	    // and were counting on adventuring to get them for you?
+	    // Perhaps you didn't have enough items and were counting on
+	    // free-turn adventuring to get them for you.
+	    // Or perhaps the shadow boss beat you.
 	    abort("Could not fulfill Rufus's quest.");
 	}
 
