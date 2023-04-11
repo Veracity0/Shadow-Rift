@@ -94,7 +94,7 @@ boolean buy_shadow_items = define_property( "VSR.BuyShadowItems", "boolean", "tr
 
 // Should we use up turns of Shadow Affinity?
 
-boolean use_up_shadow_affinity = define_property( "VSR.UseUpShadowAffinity", "boolean", "false" ).to_boolean();
+boolean use_up_shadow_affinity = define_property( "VSR.UseUpShadowAffinity", "boolean", "true" ).to_boolean();
 
 // ***************************
 // *     Shadow Rifts        *
