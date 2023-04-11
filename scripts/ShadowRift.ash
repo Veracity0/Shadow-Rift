@@ -82,9 +82,19 @@ string quest_reward = define_property( "VSR.QuestReward", "string", "forest" );
 // town_right           shadow skin     shadow bread    shadow glass
 //
 // random               Pick one at random from the 13 possible
-//                      If looking for "items", pick one that has that mundane item.
+//
+// This will be the rift we collect the reward from. If Rufus wants "items", we might
+// have to pick a different one that has the specific mundane item that Rufus wants.
 
 string rift_ingress = define_property( "VSR.RiftIngress", "string", "random" );
+
+// Should we buy items to fulfill an "items" quest?
+
+boolean buy_shadow_items = define_property( "VSR.BuyShadowItems", "boolean", "true" ).to_boolean();
+
+// Should we use up turns of Shadow Affinity?
+
+boolean use_up_shadow_affinity = define_property( "VSR.UseUpShadowAffinity", "boolean", "true" ).to_boolean();
 
 // ***************************
 // *     Shadow Rifts        *
@@ -97,6 +107,15 @@ record ShadowRift {
 };
 
 typedef ShadowRift[int] ShadowRiftArray;
+boolean contains_rift(ShadowRiftArray rifts, ShadowRift rift)
+{
+    foreach n, r in rifts {
+	if (r == rift) {
+	    return true;
+	}
+    }
+    return false;
+}
 
 static ShadowRift[string] ingress_to_rift;
 static ShadowRiftArray[item] item_to_rifts;
@@ -165,7 +184,7 @@ ShadowRift ingress_to_rift(string ingress)
 	return allRifts[random(count(allRifts))];
     }
     if (ingress_to_rift contains ingress) {
-	ingress_to_rift[ingress];
+	return ingress_to_rift[ingress];
     }
     // An abort is harsh, but validation should have eliminated this.
     abort("Ingress '" + ingress + "' is unknown");
@@ -264,91 +283,242 @@ void validate_configuration()
 // *      Action          *
 // ***************************
 
+boolean confirmed = false;
+
+void parse_parameters(string parameters)
+{
+    print();
+    print( "Checking arguments...." );
+
+    foreach n, keyword in parameters.split_string(" ") {
+	if (quest_goal_options contains keyword) {
+	    quest_goal = keyword;
+	    continue;
+	}
+	if (quest_reward_options contains keyword) {
+	    quest_reward = keyword;
+	    continue;
+	}
+	if (ingress_to_rift contains keyword) {
+	    rift_ingress = keyword;
+	    continue;
+	}
+	if (labyrinth_goal_options contains keyword) {
+	    labyrinth_goal = keyword;
+	    continue;
+	}
+	switch (keyword) {
+	case "buy":
+	    buy_shadow_items = true;
+	    break;
+	case "dontbuy":
+	    buy_shadow_items = false;
+	    break;
+	case "useallfree":
+	    use_up_shadow_affinity = true;
+	    break;
+	case "dontuseallfree":
+	    use_up_shadow_affinity = false;
+	    break;
+	case "confirm":
+	    confirmed = true;
+	    break;
+	case "default":
+	    // Use this if you want to use whatever your configured
+	    // properties are without being nagged.
+	    break;
+	case "random":
+	    rift_ingress = keyword;
+	    break;
+	default:
+	    abort("Unrecognized keyword: " + keyword);
+	}
+    }
+
+    print( "Cool, cool." );
+}
+
+boolean confirmed_free_adventures()
+{
+    // If don't care if turns are free, ok
+    if (confirmed) {
+	return true;
+    }
+
+    // If we haven't gotten Shadow Affinity today, accepting a quest
+    // gives us 11 free turns.
+    if (!get_property("_shadowAffinityToday").to_boolean()) {
+	return true;
+    }
+
+    // If Rufus's quest is ready to turn in, no turns are needed
+    if (get_property("questRufus") == "step1") {
+	return true;
+    }
+
+    // If we are willing to buy items for Rufus, no turns are neded
+    if (quest_goal == "items" && buy_shadow_items) {
+	return true;
+    }
+
+    // We already got Shadow Affinity today and we will be adventuring.
+    // Do we have any left?
+    int affinity_turns = have_effect(SHADOW_AFFINITY);
+
+    // How soon will the labyrinth or boss appear?
+    int turns_until_choice = get_property("encountersUntilSRChoice").to_int();
+
+    // Both of those encounters are free, hence ">=" rather than ">"
+    if (affinity_turns >= turns_until_choice) {
+	return true;
+    }
+
+    string message =
+	"You have " + affinity_turns + " of Shadow Affinity (and can't get any more today). " +
+	"The labyrinth or shadow boss will arrive in " + turns_until_choice + " turns. " +
+	"Are you sure you want to use non-free turns to fulfill a quest for Rufus?";
+    return user_confirm(message);
+}
+
+void check_quest_state()
+{
+    print();
+    print( "Checking quest state..." );
+
+    int lodestones = item_amount(SHADOW_LODESTONE);
+    if (lodestones > 0 ) {
+	abort("You have " + lodestones + " shadow lodestones in inventory.");
+    }
+
+    string questState = get_property("questRufus");
+    if (questState != "unstarted") {
+	string type = get_property("rufusQuestType");
+	string verb = "";
+	string target = get_property("rufusQuestTarget");
+	switch (type) {
+	case "artifact":
+	    verb = "get a ";
+	    break;
+	case "entity":
+	    verb = "fight a ";
+	    break;
+	case "items":
+	    verb = "get 3 ";
+	    target = target.to_item().plural;
+	    break;
+	}
+	print("You are already on an '" + type + "' quest to " + verb + target + " for Rufus");
+	quest_goal = type;
+    }
+
+    if (questState == "step1") {
+	print("You have fulfilled Rufus's request and just need to call him back!");
+    } else if (!confirmed_free_adventures()) {
+	exit;
+    }
+
+    print( "Clean. Ready to go!" );
+}
+
+void call_rufus()
+{
+    visit_url("inv_use.php?&whichitem=" + PAY_PHONE.to_int() + "&pwd");
+}
+
+void adventure_once(ShadowRift rift)
+{
+    // The first time you go through the rift to The 8-bit Realm, we
+    // will equip the continuum transfunctioner. Subsequent adventures
+    // do not need it, so restore item drop outfit.
+    boolean checkpoint = rift.ingress != get_property("shadowRiftIngress");
+    try {
+	if (checkpoint) {
+	    cli_execute( "checkpoint" );
+	}
+	adv1(rift.loc, 0);
+    } finally {
+	if (checkpoint) {
+	    cli_execute( "outfit checkpoint" );
+	}
+    }
+}
+
+void fulfill_quest(ShadowRift rift)
+{
+    if (quest_goal == "items") {
+	item it = get_property("rufusQuestTarget").to_item();
+	if (buy_shadow_items) {
+	    retrieve_item(3, it);
+	    return;
+	}
+	// If we are adventuring for items, we need to adventure in a
+	// rift that drops them.
+	ShadowRiftArray rifts = item_to_rifts[it];
+	if (!rifts.contains_rift(rift)) {
+	    print(rift + " does not offer " + it.plural);
+	    rift = rifts[random(count(rifts))];
+	    print("We'll find them in " + rift.loc.to_string() + ".");
+	}
+    }
+
+    // If the goal is "entity", the boss replaces the Shadow Labyrinth.
+    // If the goal is "artifact", automation will find it in the Shadow Labyrinth.
+    // If the goal is "items", automation will find the desired goal in the Shadow Labyrinth.
+    // KoLmafia will not automate if the shadowLabyrinthGoal is "Manual Control".
+    // So, set it for either "artifact" or "items".
+    if (quest_goal == "artifact" || quest_goal == "items") {
+	set_property("shadowLabyrinthGoal", labyrinth_goal);
+    }
+
+    try {
+	cli_execute( "checkpoint" );
+	// Use an item drop familiar?
+	maximize("Item Drop, -equip broken champagne bottle", false);
+
+	int affinity_turns = have_effect(SHADOW_AFFINITY);
+	boolean free_turns_only = affinity_turns > 0;
+
+	// If we are using only free turns, get Steely-Eyed Squint,
+	// which doubles Item Drop bonuses for one turn.
+	if (free_turns_only &&
+	    have_skill(STEELY_EYED_SQUINT) &&
+	    !get_property("_steelyEyedSquintUsed").to_boolean()) {
+	    use_skill(1, STEELY_EYED_SQUINT);
+	}
+
+	while (get_property("encountersUntilSRChoice") > 0 &&
+	       get_property("questRufus") != "step1") {
+	    adventure_once(rift);
+	}
+
+	if (quest_goal == "entity") {
+	    // *** Do special prep here?
+	}
+
+	// Fight the boss or traverse the Shadow Labyrinth
+	adventure_once(rift);
+    } finally {
+	cli_execute( "outfit checkpoint" );
+    }
+}
+
+void collect_reward(ShadowRift rift)
+{
+    string reward = quest_reward;
+    if (reward == "forest" && get_property("_shadowForestLooted").to_boolean()) {
+	reward = "waters";
+    }
+    set_property("choiceAdventure1500", reward_option[reward]);
+    adventure_once(rift);
+}    
+
 void main(string parameters)
 {
-    void parse_parameters()
-    {
-	print();
-	print( "Checking arguments...." );
-
-	foreach n, keyword in parameters.split_string(" ") {
-	    switch (keyword) {
-	    case "artifact":
-	    case "entity":
-	    case "items":
-		quest_goal = keyword;
-	        break;
-	    case "forge":
-	    case "waters":
-	    case "forest":
-		quest_reward = keyword;
-	        break;
-	    case "desertbeach":
-	    case "forestvillage":
-	    case "mclargehuge":
-	    case "beanstalk":
-	    case "manor3":
-	    case "8bit":
-	    case "pyramid":
-	    case "giantcastle":
-	    case "woods":
-	    case "hiddencity":
-	    case "cemetery":
-	    case "plains":
-	    case "town_right":
-	    case "random":
-		rift_ingress = keyword;
-	    	break;
-	    case "muscle":
-	    case "mysticality":
-	    case "moxie":
-	    case "effects":
-	    case "maxHP":
-	    case "maxMP":
-	    case "resistance":
-		labyrinth_goal = keyword;
-	    	break;
-	    case "default":
-		// Use this if you want to use whatever your configured
-		// properties are without being nagged.
-		break;
-	    default:
-		abort("Unrecognized keyword: " + keyword);
-	    }
-	}
-	print( "Cool, cool." );
-    }
-
-    void check_quest_state()
-    {
-	print();
-	print( "Checking quest state...." );
-
-	if (get_property("questRufus") != "unstarted") {
-	    abort("You are already on a quest for Rufus: " +
-		  get_property("rufusQuestType") +
-		  " -> " +
-		  get_property("rufusQuestTarget"));
-	}
-
-	if (get_property("_shadowAffinityToday").to_boolean() &&
-	    !user_confirm("You have already gained Shadow Affinity today, so this will take turns. Are you sure?")) {
-	    exit;
-	}
-
-	int lodestones = item_amount(SHADOW_LODESTONE);
-	if (lodestones > 0 ) {
-	    abort("You already have " + lodestones + " shadow lodestones in inventory.");
-	}
-
-	print( "Clean. Ready to go!" );
-    }
-
     // Check initial configuration
     validate_configuration();
 
     // Parse parameters and override configuration
-    parse_parameters();
+    parse_parameters(parameters);
 
     // Check quest state to ensure we can handle this
     check_quest_state();
@@ -372,79 +542,36 @@ void main(string parameters)
     }
     print("You will find the following items there: " + rift_items(rift));
 
-    // If the goal is "entity", the boss replaces the Shadow Labyrinth.
-    // If the goal is "artifact", automation will find it in the Shadow Labyrinth.
-    // If the goal is "items", automation will find the desired goal in the Shadow Labyrinth.
-    // KoLmafia will not automate if the shadowLabyrinthGoal is "Manual Control".
-    // So, set it for either "artifact" or "items".
-    if (quest_goal == "artifact" || quest_goal == "items") {
-	set_property("shadowLabyrinthGoal", labyrinth_goal);
+    if (get_property("questRufus") == "unstarted") {
+	// Accept a quest from Rufus.
+	call_rufus();
+	run_choice(rufus_option[quest_goal]);
+	print("You accepted an '" + get_property("rufusQuestType") + "' quest to get " + get_property("rufusQuestTarget"));
     }
 
-    // Accept a quest from Rufus.
-    visit_url("inv_use.php?&whichitem=" + PAY_PHONE.to_int() + "&pwd");
-    run_choice(rufus_option[quest_goal]);
+    // If our goal is not already fulfilled, buy items or
+    // adventure for artifact, entity, or items
+    if (get_property("questRufus") == "started") {
+	fulfill_quest(rift);
+    } 
 
-    print("You accepted an '" + get_property("rufusQuestType") + "' quest to get " + get_property("rufusQuestTarget"));
-
-    void adventure_once()
-    {
-	// The first time you go through the rift to The 8-bit Realm,
-	// we will equip the continuum transfunctioner. Subsequent
-	// adventures do not need it, so restore item drop outfit.
-	try {
-	    cli_execute( "checkpoint" );
-	    adv1(rift.loc, 0);
-	} finally {
-	    cli_execute( "outfit checkpoint" );
-	}
+    if (get_property("questRufus") != "step1") {
+	// Perhaps you didn't have enough items and were counting on
+	// free-turn adventuring to get them for you.  Or perhaps the
+	// shadow boss beat you.
+	abort("Could not fulfill Rufus's quest.");
     }
 
-    try {
-	cli_execute( "checkpoint" );
-	// Use an item drop familiar?
-	maximize("Item Drop, -equip broken champagne bottle", false);
-
-	int affinity_turns = have_effect(SHADOW_AFFINITY);
-	boolean free_turns_only = affinity_turns > 0;
-
-	// If we are using only free turns, get Steely-Eyed Squint,
-	// which doubles Item Drop bonuses for one turn.
-	if (free_turns_only &&
-	    have_skill(STEELY_EYED_SQUINT) &&
-	    !get_property("_steelyEyedSquintUsed").to_boolean()) {
-	    use_skill(1, STEELY_EYED_SQUINT);
-	}
-
-	while (get_property("encountersUntilSRChoice") > 0) {
-	    adventure_once();
-	}
-
-	if (quest_goal == "entity") {
-	    // *** Do special prep here?
-	}
-
-	// Fight the boss or traverse the Shadow Labyrinth
-	adventure_once();
-
-	if (get_property("questRufus") != "step1") {
-	    // Perhaps you didn't have enough items and were counting on
-	    // free-turn adventuring to get them for you.
-	    // Or perhaps the shadow boss beat you.
-	    abort("Could not fulfill Rufus's quest.");
-	}
-
+    if (use_up_shadow_affinity) {
 	// If we have left over turns of Shadow Affinity, use them up by
 	// adventuring in the Shadow Rift.
 	while (have_effect(SHADOW_AFFINITY) > 0) {
-	    adventure_once();
+	    adventure_once(rift);
 	}
-    } finally {
-	cli_execute( "outfit checkpoint" );
     }
 
     // Fulfill the quest with Rufus
-    visit_url("inv_use.php?&whichitem=" + PAY_PHONE.to_int() + "&pwd");
+    call_rufus();
     run_choice(1);
 
     // You should now have Rufus's shadow lodestone
@@ -453,31 +580,8 @@ void main(string parameters)
 	abort("You didn't get a shadow lodestone!");
     }
 
-    void collect_reward()
-    {
-	string page = visit_url( SHADOW_RIFT.to_url() );
-	if ( page.contains_text( "choice.php" ) ) {
-	    int option = reward_option[quest_reward];
-	    // You can only get the forest once per day.
-	    if (!(available_choice_options() contains option)) {
-		option = 2;
-	    }
-	    run_choice(option);
-	    return;
-	}
-
-	// Say what? You have a shadow lodestone.
-	if ( page.contains_text( "fight.php" ) ) {
-	    // Your CCS had better be set up to handle this!
-	    run_combat();
-	    return;
-	}
-	// What is this?
-	abort("What happened?");
-    }
-
     // Adventure once more to collect your reward
-    collect_reward();
+    collect_reward(rift);
 
     print("Done adventuring in the Shadow Rift!");
 }
