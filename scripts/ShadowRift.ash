@@ -419,7 +419,6 @@ void check_quest_state()
 
     print( "Clean. Ready to go!" );
 }
-
 void call_rufus()
 {
     visit_url("inv_use.php?&whichitem=" + PAY_PHONE.to_int() + "&pwd");
@@ -578,6 +577,29 @@ void main(string parameters)
     int lodestones = item_amount(SHADOW_LODESTONE);
     if (lodestones == 0 ) {
 	abort("You didn't get a shadow lodestone!");
+    }
+
+    void collect_reward()
+    {
+	string page = visit_url( SHADOW_RIFT.to_url() );
+	if ( page.contains_text( "choice.php" ) ) {
+	    int option = reward_option[quest_reward];
+	    // You can only get the forest once per day.
+	    if (!(available_choice_options() contains option)) {
+		option = 2;
+	    }
+	    run_choice(option);
+	    return;
+	}
+
+	// Say what? You have a shadow lodestone.
+	if ( page.contains_text( "fight.php" ) ) {
+	    // Your CCS had better be set up to handle this!
+	    run_combat();
+	    return;
+	}
+	// What is this?
+	abort("What happened?");
     }
 
     // Adventure once more to collect your reward
