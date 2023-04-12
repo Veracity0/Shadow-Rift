@@ -256,6 +256,21 @@ static string_set quest_reward_options = $strings[
     forest
 ];
 
+static string_set shadow_item_options = $strings[
+    bread,
+    brick,
+    flame,
+    fluid,
+    glass,
+    ice,
+    nectar,
+    sausage,
+    sinew,
+    skin,
+    stick,
+    venom,
+];
+
 void validate_configuration()
 {
     boolean valid = true;
@@ -322,7 +337,13 @@ void print_help()
     print("(also used for adventuring, except for 'items', if it doesn't have what Rufus wants)");
     print("desertbeach, forestvillage, mclargehuge, beanstalk, manor3, 8bit");
     print("pyramid, giantcastle, woods, hiddencity, cemetery, plains, town_right");
-    print("random - pick one at random. For 'items', one which has what Rufus wants.");
+    print();
+    print("random - pick an ingress at random. For 'items', one which has what Rufus wants.");
+    print();
+    print("What kind of shadow item you want to harvest.");
+    print("(randomly selects one of the 3-4 ingresses that provide that item.)");
+    print("bread, brick, flame, fluid, glass, ice");
+    print("nectar, sausage, sinew, skin, stick, venom");
     print();
     print("Use free turns (Shadow Affinity) only? (VSR.FreeTurnsOnly)");
     print("(If not and you attempt it, you'll get a nag to confirm.");
@@ -421,6 +442,17 @@ void parse_parameters(string parameters)
 	}
 	if (labyrinth_goal_options contains keyword) {
 	    labyrinth_goal = keyword;
+	    continue;
+	}
+
+	// Keywords that match an item are like "random",
+	// selected from the rifts that supply that item.
+	if (shadow_item_options contains keyword) {
+	    item it = to_item("shadow " + keyword);
+	    ShadowRiftArray rifts = item_to_rifts[it];
+	    ShadowRift rift = rifts[random(count(rifts))];
+	    rift_ingress = rift.ingress;
+	    print("We'll look for " + it.plural + " in " + rift.loc.to_string() + ".");
 	    continue;
 	}
 
@@ -530,7 +562,7 @@ void check_quest_state()
 }
 
 // ***************************
-// *      Action          *
+// *        Tasks            *
 // ***************************
 
 void call_rufus()
