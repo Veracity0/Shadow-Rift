@@ -88,11 +88,22 @@ string quest_reward = define_property( "VSR.QuestReward", "string", "forest" );
 
 string rift_ingress = define_property( "VSR.RiftIngress", "string", "random" );
 
+// Should we use only free turns? I.e., require Shadow Affinity to be
+// active (or available).  If so, we will prompt for confirmation if you
+// attempt a quest where you will run out of free turns.
+
+boolean free_turns_only = define_property( "VSR.FreeTurnsOnly", "boolean", "true" ).to_boolean();
+
 // Should we buy items to fulfill an "items" quest?
 
 boolean buy_shadow_items = define_property( "VSR.BuyShadowItems", "boolean", "true" ).to_boolean();
 
-// Should we use up turns of Shadow Affinity?
+// Should we use up remaining turns of Shadow Affinity after fulfilling quest?
+//
+// If you are questing for "items" and are buying them, quests take zero
+// turns.  You might want to do that as often as you like and then
+// finish up with a different quest which will use up all your free
+// turns.
 
 boolean use_up_shadow_affinity = define_property( "VSR.UseUpShadowAffinity", "boolean", "true" ).to_boolean();
 
@@ -110,7 +121,7 @@ typedef ShadowRift[int] ShadowRiftArray;
 boolean contains_rift(ShadowRiftArray rifts, ShadowRift rift)
 {
     foreach n, r in rifts {
-	if (r == rift) {
+	if (r.ingress == rift.ingress) {
 	    return true;
 	}
     }
@@ -280,17 +291,122 @@ void validate_configuration()
 }
 
 // ***************************
-// *      Action          *
+// *        Setup            *
 // ***************************
 
-boolean confirmed = false;
+void print_help()
+{
+    print();
+    print("ShadowRift KEYWORD [KEYWORD]...");
+    print();
+    print("KEYWORD can be a command:");
+    print("help - print this message");
+    print("check - visit Rufus and see what he is looking for.");
+    print();
+    print("KEYWORD can be 'default' to simply use all properties as configured/defaulted.");
+    print("That is normal behaviour unless you override individual properties.");
+    print("You only need this if you don't intend (need) to override anything.");
+    print();
+    print("KEYWORD can override configuration properties:");
+    print();
+    print("What kind of quest to accept (VSR.QuestGoal):");
+    print("artifact, entity, items");
+    print();
+    print("What reward to get at the Labyrinth of Shadows (VSR.LabyrinthGoal - 'items' only)");
+    print("muscle, mysticality, moxie, effects, maxHP, maxMP, resistance");
+    print();
+    print("What reward to get with your shadow lodestone (VSR.QuestReward)");
+    print("forge, waters, forest (once per day; chooses waters subsequently)");
+    print();
+    print("Which shadow rift ingress to use for getting the quest reward (VSR.RiftIngress)");
+    print("(also used for adventuring, except for 'items', if it doesn't have what Rufus wants)");
+    print("desertbeach, forestvillage, mclargehuge, beanstalk, manor3, 8bit");
+    print("pyramid, giantcastle, woods, hiddencity, cemetery, plains, town_right");
+    print("random - pick one at random. For 'items', one which has what Rufus wants.");
+    print();
+    print("Use free turns (Shadow Affinity) only? (VSR.FreeTurnsOnly)");
+    print("(If not and you attempt it, you'll get a nag to confirm.");
+    print("onlyfree, notonlyfree");
+    print();
+    print("Buy shadow items to full Rufus's needs for an 'items' quest? (VSR.BuyShadowItems)");
+    print("(This will let you finish the quest with no turns spent.)");
+    print("buy, nobuy");
+    print();
+    print("Use up Shadow Affinity if fulfill quest with turns available? (VSR.UseUpShadowAffinity)");
+    print("allfree, notallfree");
+}
+
+// Forward reference
+void call_rufus();
+
+string print_current_rufus_quest()
+{
+    string type = get_property("rufusQuestType");
+    string verb = "";
+    string target = get_property("rufusQuestTarget");
+    switch (type) {
+    case "artifact":
+	verb = "get a ";
+	break;
+    case "entity":
+	verb = "fight a ";
+	break;
+    case "items":
+	verb = "get 3 ";
+	target = target.to_item().plural;
+	break;
+    }
+    print("You are on an '" + type + "' quest to " + verb + target + " for Rufus");
+    return type;
+}
+
+void check_rufus()
+{
+    switch (get_property("questRufus")) {
+    case "unstarted":
+	print("You are not currently on a quest for Rufus.");
+	call_rufus();	// Call him
+	run_choice(6);	// Hang up on him
+	print("He'd like you to fight a " + get_property("rufusDesiredEntity"));
+	print("He'd like you to retrieve a " + get_property("rufusDesiredArtifact"));
+	print("He'd like you to fetch 3 " + get_property("rufusDesiredItems").to_item().plural);
+	return;
+    case "started":
+	print_current_rufus_quest();
+	return;
+    case "step1":
+	print_current_rufus_quest();
+	print("You are ready to call him back and turn it in!");
+	return;
+    }
+}
 
 void parse_parameters(string parameters)
 {
     print();
     print( "Checking arguments...." );
 
+    boolean valid = true;
     foreach n, keyword in parameters.split_string(" ") {
+	// Commands
+	switch (keyword) {
+	case "help":
+	    print_help();
+	    exit;
+	case "check":
+	    check_rufus();
+	    exit;
+	case "default":
+	    // If a script's main() function has arguments, KoLmafia
+	    // will require that you provide some, and will prompt you
+	    // for them if you invoke the script without parameters.
+	    //
+	    // If you are content to run the script with properties as
+	    // configured (or defaulted), use this to skip that nag.
+	    continue;
+	}
+
+	// Keywords that match values of configuration properties
 	if (quest_goal_options contains keyword) {
 	    quest_goal = keyword;
 	    continue;
@@ -307,32 +423,40 @@ void parse_parameters(string parameters)
 	    labyrinth_goal = keyword;
 	    continue;
 	}
+
+	// Keywords that alter configuration properties, but are not
+	// exact matches. For example, keywords corresponding to "true"
+	// or "false" for boolean properties.
 	switch (keyword) {
-	case "buy":
-	    buy_shadow_items = true;
-	    break;
-	case "dontbuy":
-	    buy_shadow_items = false;
-	    break;
-	case "useallfree":
-	    use_up_shadow_affinity = true;
-	    break;
-	case "dontuseallfree":
-	    use_up_shadow_affinity = false;
-	    break;
-	case "confirm":
-	    confirmed = true;
-	    break;
-	case "default":
-	    // Use this if you want to use whatever your configured
-	    // properties are without being nagged.
-	    break;
 	case "random":
 	    rift_ingress = keyword;
-	    break;
-	default:
-	    abort("Unrecognized keyword: " + keyword);
+	    continue;
+	case "onlyfree":
+	    free_turns_only = true;
+	    continue;
+	case "notonlyfree":
+	    free_turns_only = false;
+	    continue;
+	case "buy":
+	    buy_shadow_items = true;
+	    continue;
+	case "nobuy":
+	    buy_shadow_items = false;
+	    continue;
+	case "allfree":
+	    use_up_shadow_affinity = true;
+	    continue;
+	case "notallfree":
+	    use_up_shadow_affinity = false;
+	    continue;
 	}
+
+	print("Unrecognized keyword: " + keyword, "red");
+	valid = false;
+    }
+
+    if (!valid) {
+	abort("Try 'ShadowRift help' to learn command syntax.");
     }
 
     print( "Cool, cool." );
@@ -341,7 +465,7 @@ void parse_parameters(string parameters)
 boolean confirmed_free_adventures()
 {
     // If don't care if turns are free, ok
-    if (confirmed) {
+    if (!free_turns_only) {
 	return true;
     }
 
@@ -387,28 +511,13 @@ void check_quest_state()
 
     int lodestones = item_amount(SHADOW_LODESTONE);
     if (lodestones > 0 ) {
-	abort("You have " + lodestones + " shadow lodestones in inventory.");
+	print("You have " + lodestones + " shadow lodestones in inventory.", "red");
+	exit;
     }
 
     string questState = get_property("questRufus");
     if (questState != "unstarted") {
-	string type = get_property("rufusQuestType");
-	string verb = "";
-	string target = get_property("rufusQuestTarget");
-	switch (type) {
-	case "artifact":
-	    verb = "get a ";
-	    break;
-	case "entity":
-	    verb = "fight a ";
-	    break;
-	case "items":
-	    verb = "get 3 ";
-	    target = target.to_item().plural;
-	    break;
-	}
-	print("You are already on an '" + type + "' quest to " + verb + target + " for Rufus");
-	quest_goal = type;
+	quest_goal = print_current_rufus_quest();
     }
 
     if (questState == "step1") {
@@ -419,6 +528,10 @@ void check_quest_state()
 
     print( "Clean. Ready to go!" );
 }
+
+// ***************************
+// *      Action          *
+// ***************************
 
 void call_rufus()
 {
@@ -443,6 +556,50 @@ void adventure_once(ShadowRift rift)
     }
 }
 
+void prepare_for_boss()
+{
+    if (quest_goal == "entity") {
+	// What to do here?
+	// 
+	// How about restoring 100% HP to avoid insta-kill from the
+	// shadow scythe?
+	restore_hp(100);
+
+	switch (get_property("rufusQuestTarget")) {
+	case "shadow cauldron":
+	    // Always loses initiative
+	    // Physical Resistance: 100%
+	    // Passive hot damage
+	    break;
+	case "shadow matrix":
+	    // Initiative: 1000
+	    // Physical Resistance: 100%
+	    // Blocks physical attacks
+	    break;
+	case "shadow orrery":
+	    // Always loses initiative
+	    // Physical Resistance: 100%
+	    // Reflects spells to damage you
+	    break;
+	case "shadow scythe":
+	    // Always wins initiative
+	    // Physical Resistance: 100%
+	    // Hits for 90%  of your Max HP every round
+	    break;
+	case "shadow spire":
+	    // Always loses initiative
+	    // Physical Resistance: 100%
+	    // Hits for 30-35%  of your Max HP every round
+	    break;
+	case "shadow tongue":
+	    // Initiative: 200
+	    // Physical Resistance: 100%
+	    // Passive sleaze damage
+	    break;
+	}
+    }
+}
+
 void fulfill_quest(ShadowRift rift)
 {
     if (quest_goal == "items") {
@@ -455,7 +612,7 @@ void fulfill_quest(ShadowRift rift)
 	// rift that drops them.
 	ShadowRiftArray rifts = item_to_rifts[it];
 	if (!rifts.contains_rift(rift)) {
-	    print(rift + " does not offer " + it.plural);
+	    print(rift.loc + " does not offer " + it.plural);
 	    rift = rifts[random(count(rifts))];
 	    print("We'll find them in " + rift.loc.to_string() + ".");
 	}
@@ -491,12 +648,12 @@ void fulfill_quest(ShadowRift rift)
 	    adventure_once(rift);
 	}
 
-	if (quest_goal == "entity") {
-	    // *** Do special prep here?
-	}
+	prepare_for_boss();
 
-	// Fight the boss or traverse the Shadow Labyrinth
-	adventure_once(rift);
+	if (get_property("questRufus") != "step1") {
+	    // Fight the boss or traverse the Shadow Labyrinth
+	    adventure_once(rift);
+	}
     } finally {
 	cli_execute( "outfit checkpoint" );
     }
@@ -512,6 +669,10 @@ void collect_reward(ShadowRift rift)
     adventure_once(rift);
 }    
 
+// ***************************
+// *      Action          *
+// ***************************
+
 void main(string parameters)
 {
     // Check initial configuration
@@ -526,11 +687,18 @@ void main(string parameters)
     print();
     print("You want to accept an " + quest_goal + " quest from Rufus.");
     print("You want the '" + quest_reward + "' reward for accomplishing that.");
-    if (quest_goal == "items") {
-	print("You want the '" + labyrinth_goal + "' result from the Shadow Labyrinth.");
-    }
     if (quest_reward == "forest" && get_property("_shadowForestLooted").to_boolean()) {
 	print("(You have already looted the forest today, so instead, you will get Shadow Waters.)");
+    }
+    if (quest_goal == "items") {
+	if (buy_shadow_items) {
+	    print("You are willing to buy items to fulfill Rufus's request.");
+	    print("This means this quest will take no turns!");
+	} else {
+	    print("You are not willing to buy items for Rufus, so you will need to adventure to find them.");
+	    print("We will stop, ready or not, once you reach the Shadow Labyrinth.");
+	    print("You want the '" + labyrinth_goal + "' result from the Shadow Labyrinth.");
+	}
     }
 
     print("You want to enter " + rift_name(rift_ingress) + ".");
@@ -541,6 +709,7 @@ void main(string parameters)
 	print("We chose " + rift.loc.to_string() + " for you.");
     }
     print("You will find the following items there: " + rift_items(rift));
+    print("After fulfilling Rufus's quest, you " + (!use_up_shadow_affinity ? "do not" : "") + " want to use up any remaining daily free fights.");
 
     if (get_property("questRufus") == "unstarted") {
 	// Accept a quest from Rufus.
