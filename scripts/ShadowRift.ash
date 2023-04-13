@@ -460,6 +460,9 @@ void parse_parameters(string parameters)
 	// exact matches. For example, keywords corresponding to "true"
 	// or "false" for boolean properties.
 	switch (keyword) {
+	case "shadow":
+	    // So you can use "shadow brick". Ignore.
+	    continue;
 	case "random":
 	    rift_ingress = keyword;
 	    continue;
