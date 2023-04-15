@@ -13,7 +13,8 @@
 // Additionally, each time you call Rufus on your closed-circuit pay phone
 // and accept his quest to defeat a shadow entity, one of six shadow bosses
 // will appear after you have fought with 10 "normal" shadow monsters.
-
+// The bosses each have guaranteed drops for two specific shadow items.
+//
 // All shadow monsters, normal and boss, have 100% physical resistance.
 // Their Atk, Def, and HP each have a fixed base, but scale up for every
 // combat you have in the Shadow Rift, win or lose.
@@ -46,11 +47,11 @@
 // With 100% physical resistance, you need skills to do enough damage.
 // The shadow orrery reflects skills, but combat items can provide elemental damage
 // The shadow scythe will kill you on its second hit.
-// The shadow spire will take 3-4 hits
+// The shadow spire will kill you in 3-4 hits
 //
 // Strategy:
 //
-// Silent Treatment is a skill which negates physcal and elemental
+// Silent Treatment is a skill which negates physical and elemental
 // resistances. This skill makes these combats trivial, even after a lot
 // of scaling. Caveat: you don't have time to use it on the shadow scythe.
 //
@@ -94,7 +95,7 @@ void main(int initround, monster foe, string page)
 	// These are the mundane shadow monsters
 	//
 	// They each have a 10-20% base chance to drop a single item.
-	// Item Drop is reduced by 4/5 in the Shadow Rift, but
+	// Item Drop is reduced by 80% in the Shadow Rift, but
 	// pickpocket percentage is unreduced. It is well worth trying
 	// to steal, since the monsters are not especially dangerous.
 	if (can_still_steal()) {
@@ -106,7 +107,7 @@ void main(int initround, monster foe, string page)
 	if (have_skill(SILENT_TREATMENT)) {
 	    page = use_skill(SILENT_TREATMENT);
 	}
-	// Finish the monster off with Sacegeyser!
+	// Finish the monster off with Saucegeyser!
 	while (page.contains_text("fight.php")) {
 	    page = use_skill(SAUCEGEYSER);
 	}
@@ -116,10 +117,12 @@ void main(int initround, monster foe, string page)
 	// always gets the drop, unless you have equipment or a skill
 	// that makes it miss or skip its first attack, you need to
 	// one-shot it. Fortunately, it has relatively few HP.
-	page = use_skill(SAUCEGEYSER);
+	while (page.contains_text("fight.php")) {
+	    page = use_skill(SAUCEGEYSER);
+	}
 	return;
     case $monster[ shadow orrery ]:
-	// This boss reflects spells and enhance Elemental
+	// This boss reflects spells and has enhanced Elemental
 	// resistance. It is worth eliminating its resistances.
 	if (have_skill(SILENT_TREATMENT)) {
 	    page = use_skill(SILENT_TREATMENT);
@@ -128,7 +131,7 @@ void main(int initround, monster foe, string page)
 	// fight it with your weapon. However, it's easier to simply
 	// throw gas cans at it until it burns up.
 	while (page.contains_text("fight.php")) {
-	    // You don't NEED Funkslinging, but it will finish of the
+	    // You don't NEED Funkslinging, but it will finish off the
 	    // monster in fewer rounds.
 	    if (have_skill(FUNKSLINGING)) {
 		page = throw_items(GAS_CAN, GAS_CAN);
@@ -150,6 +153,7 @@ void main(int initround, monster foe, string page)
 	if (have_skill(SILENT_TREATMENT)) {
 	    page = use_skill(SILENT_TREATMENT);
 	}
+	// Finish the monster off with Saucegeyser!
 	while (page.contains_text("fight.php")) {
 	    page = use_skill(SAUCEGEYSER);
 	}
