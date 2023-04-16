@@ -208,7 +208,5 @@ void main(int initround, monster foe, string page)
     // We don't expect to see any other monsters through a Shadow Rift;
     // I don't believe wanderers show up there. If we do see one, just
     // beat it into submission.
-    while (page.contains_text("fight.php")) {
-	attack();
-    }
+    slay();
 }
