@@ -127,13 +127,16 @@ void main(int initround, monster foe, string page)
 	if (have_skill(SILENT_TREATMENT)) {
 	    page = use_skill(SILENT_TREATMENT);
 	}
-	// If you eliminated its resistances, you could probably just
-	// fight it with your weapon. However, it's easier to simply
-	// throw gas cans at it until it burns up.
+	// If you negated its resistances, you can probably finish it
+	// off with your weapon. However, it's faster and safer to
+	// simply throw gas cans at it until it burns up.
 	while (page.contains_text("fight.php")) {
+	    int gas_cans = item_amount(GAS_CAN);
 	    // You don't NEED Funkslinging, but it will finish off the
 	    // monster in fewer rounds.
-	    if (have_skill(FUNKSLINGING)) {
+	    if (gas_cans == 0) {
+		page = attack();
+	    } else if (gas_cans > 1 && have_skill(FUNKSLINGING)) {
 		page = throw_items(GAS_CAN, GAS_CAN);
 	    } else {
 		page = throw_item(GAS_CAN);
