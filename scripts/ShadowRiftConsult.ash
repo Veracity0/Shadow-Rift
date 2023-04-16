@@ -119,17 +119,27 @@ void main(int initround, monster foe, string page)
     boolean can_funksling = have_skill(FUNKSLINGING);
     boolean have_silent_treatment = have_skill(SILENT_TREATMENT);
 
+    // Mundane shadow monsters are worth pickpocketing
+    void pickpocket()
+    {
+	if (can_still_steal()) {
+	    page = steal();
+	}
+    }
+
     // Your combat spells should do enough elemental damage by itself,
     // until the monsters have scaled too much, but Silent Treatment
     // will make it effective for even heavily scaled monsters.
-    void shun() {
+    void shun()
+    {
 	if ( !must_attack && have_silent_treatment ) {
 	    page = use_skill( SILENT_TREATMENT );
 	}
     }
 
     // Finish the monster off!
-    void slay() {
+    void slay()
+    {
 	while ( page.contains_text("fight.php") ) {
 	    if ( must_attack ) {
 		page = attack();
@@ -171,9 +181,7 @@ void main(int initround, monster foe, string page)
 	// Item Drop is reduced by 80% in the Shadow Rift, but
 	// pickpocket percentage is unreduced. It is well worth trying
 	// to steal, since the monsters are not especially dangerous.
-	if (can_still_steal()) {
-	    page = steal();
-	}
+	pickpocket();
 	shun();
 	slay();
 	return;
@@ -206,9 +214,9 @@ void main(int initround, monster foe, string page)
     }
 
     // We don't expect to see any other monsters through a Shadow Rift;
-    // I don't believe wanderers show up there. If we do see one, just
-    // beat it into submission.
-    while (page.contains_text("fight.php")) {
-	attack();
-    }
+    // I don't think wanderers show up there. If we do see one (perhaps
+    // the user set this consult script for use elsewhere?), try to
+    // steal something and then just beat the monster into submission.
+    pickpocket();
+    slay();
 }

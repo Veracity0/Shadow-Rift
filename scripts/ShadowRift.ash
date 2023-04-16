@@ -51,7 +51,7 @@ string quest_goal = define_property( "VSR.QuestGoal", "string", "artifact" );
 // maxMP                30 Shadow's Chill: Maximum MP +300
 // resistance           30 Shadow's Thickness: +5 Spooky, Hot, Sleaze resistance
 
-string labyrinth_goal = define_property( "VSR.LabyrinthGoal", "string", "maxHP" );
+string labyrinth_goal = define_property( "VSR.LabyrinthGoal", "string", "effects" );
 
 // What is our quest reward?
 //
