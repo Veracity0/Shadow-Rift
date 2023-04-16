@@ -1,3 +1,5 @@
+import <vprops.ash>;
+
 // This consult script handles all the monsters you can encounter
 // through the Shadow Rift.
 //
@@ -66,17 +68,88 @@
 // you throw it, and the same percentage at the end of the round. On top
 // of that, it does a decaying amount of damage in subsequent rounds.
 //
-// This script will use those skills and items.
+// This script will use those skills and items by default, although you
+// can configure others, if desired.
 
+// ***************************
+// *     Configuration       *
+// ***************************
+
+// Which combat skill to use.
+skill combat_spell = define_property( "VSR.CombatSpell", "skill", "Saucegeyser" ).to_skill();
+
+// Which combat item to use.
+item combat_item = define_property( "VSR.CombatItem", "item", "gas can" ).to_item();
+
+// ***************************
+// *      Validation         *
+// ***************************
+
+static skill NO_SKILL = $skill[ none ];
+static item NO_ITEM = $item[ none ];
+
+// You don't HAVE to use a combat spell or item, if your equipment adds
+// enough elemental damage to your attack, but they'll speed up combat.
+
+if ( !have_skill( combat_spell ) || ( combat_spell.type != "combat" ) ) {
+    combat_spell = NO_SKILL;
+ }
+
+if ( !combat_item.combat ) {
+    combat_item = NO_ITEM;
+ }
+
+// ***************************
+// *        Action           *
+// ***************************
+
+// A combat skill which negates foe's physical and elemental resistances
 static skill SILENT_TREATMENT = $skill[ Silent Treatment ];
-static skill SAUCEGEYSER = $skill[ Saucegeyser ];
+
+// A passive skill which lets you throw two combat items at once.
 static skill FUNKSLINGING = $skill[ Ambidextrous Funkslinging ];
-static item GAS_CAN = $item[ gas can ];
+
+// An item which forces you to attack, rather than use skills and items.
+static item DRUNKULA = $item[ Drunkula's wineglass ];
 
 void main(int initround, monster foe, string page)
 {
-    if (!have_skill(SAUCEGEYSER)) {
-	abort("You need to have Saucegeyser");
+    boolean must_attack = have_equipped( DRUNKULA );
+    boolean no_combat_spells = ( foe == $monster[ shadow orrery ] );
+    boolean can_funksling = have_skill(FUNKSLINGING);
+    boolean have_silent_treatment = have_skill(SILENT_TREATMENT);
+
+    // Your combat spells should do enough elemental damage by itself,
+    // until the monsters have scaled too much, but Silent Treatment
+    // will make it effective for even heavily scaled monsters.
+    void shun() {
+	if ( !must_attack && have_silent_treatment ) {
+	    page = use_skill( SILENT_TREATMENT );
+	}
+    }
+
+    // Finish the monster off!
+    void slay() {
+	while ( page.contains_text("fight.php") ) {
+	    if ( must_attack ) {
+		page = attack();
+	    } else if ( no_combat_spells ) {
+		int items = item_amount( combat_item );
+		// You don't NEED Funkslinging, but it will finish off
+		// the monster in fewer rounds.
+		if (items == 0) {
+		    page = attack();
+		} else if (items > 1 && can_funksling) {
+		    page = throw_items( combat_item, combat_item );
+		} else {
+		    page = throw_item( combat_item );
+		}
+	    } else if ( combat_spell != NO_SKILL ) {
+		page = use_skill( combat_spell );
+	    } else {
+		page = attack();
+	    }
+	}
     }
 
     switch ( foe ) {
@@ -101,47 +174,21 @@ void main(int initround, monster foe, string page)
 	if (can_still_steal()) {
 	    page = steal();
 	}
-	// Saucegeyser should do enough elemental damage by itself,
-	// until the monsters have scaled too much, but Silent Treatment
-	// will make it effect for even heavily scaled monsters.
-	if (have_skill(SILENT_TREATMENT)) {
-	    page = use_skill(SILENT_TREATMENT);
-	}
-	// Finish the monster off with Saucegeyser!
-	while (page.contains_text("fight.php")) {
-	    page = use_skill(SAUCEGEYSER);
-	}
+	shun();
+	slay();
 	return;
     case $monster[ shadow scythe ]:
 	// This boss does 90% of your Maximum HP every round. Since it
 	// always gets the drop, unless you have equipment or a skill
 	// that makes it miss or skip its first attack, you need to
 	// one-shot it. Fortunately, it has relatively few HP.
-	while (page.contains_text("fight.php")) {
-	    page = use_skill(SAUCEGEYSER);
-	}
+	slay();
 	return;
     case $monster[ shadow orrery ]:
 	// This boss reflects spells and has enhanced Elemental
 	// resistance. It is worth eliminating its resistances.
-	if (have_skill(SILENT_TREATMENT)) {
-	    page = use_skill(SILENT_TREATMENT);
-	}
-	// If you negated its resistances, you can probably finish it
-	// off with your weapon. However, it's faster and safer to
-	// simply throw gas cans at it until it burns up.
-	while (page.contains_text("fight.php")) {
-	    int gas_cans = item_amount(GAS_CAN);
-	    // You don't NEED Funkslinging, but it will finish off the
-	    // monster in fewer rounds.
-	    if (gas_cans == 0) {
-		page = attack();
-	    } else if (gas_cans > 1 && have_skill(FUNKSLINGING)) {
-		page = throw_items(GAS_CAN, GAS_CAN);
-	    } else {
-		page = throw_item(GAS_CAN);
-	    }
-	}
+	shun();
+	slay();
 	return;
     case $monster[ shadow cauldron ]:
     case $monster[ shadow tongue ]:
@@ -152,14 +199,9 @@ void main(int initround, monster foe, string page)
     case $monster[ shadow spire ]:
 	// This boss does 30-35% of your Maximum HP every time it hits
 	// you.  We have time to negate its resistances before defeating
-	// it with good old Saucegeyser.
-	if (have_skill(SILENT_TREATMENT)) {
-	    page = use_skill(SILENT_TREATMENT);
-	}
-	// Finish the monster off with Saucegeyser!
-	while (page.contains_text("fight.php")) {
-	    page = use_skill(SAUCEGEYSER);
-	}
+	// it with our combat spell.
+	shun();
+	slay();
 	return;
     }
 
