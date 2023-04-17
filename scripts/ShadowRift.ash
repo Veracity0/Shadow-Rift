@@ -40,7 +40,7 @@ import <vprops.ash>;
 
 string quest_goal = define_property( "VSR.QuestGoal", "string", "artifact" );
 
-// If we seek items, the Shadow Labyrinth will give us a buff or stats.
+// If we seek items, the Shadow Labyrinth will give us a buff or stats or extend effects.
 // Which one do you want?
 //
 // muscle               90-100 Muscle substats
@@ -106,6 +106,18 @@ boolean buy_shadow_items = define_property( "VSR.BuyShadowItems", "boolean", "tr
 // turns.
 
 boolean use_up_shadow_affinity = define_property( "VSR.UseUpShadowAffinity", "boolean", "true" ).to_boolean();
+
+// Should we use our custome ShadowRiftConsult script for combats?
+
+boolean use_consult_script = define_property( "VSR.UseShadowRiftConsult", "boolean", "true" ).to_boolean();
+
+// Should we equip a Space Tourist Phaser for combat?
+//
+// We'll always do this if you are overdrunk, but if your CCS doesn't
+// want to use combat spells and/or combat items, this could be
+// effective in general.
+
+boolean use_space_tourist_phaser = define_property( "VSR.UseSpaceTouristPhaser", "boolean", "false" ).to_boolean();
 
 // ***************************
 // *     Shadow Rifts        *
@@ -214,6 +226,8 @@ string rift_items(ShadowRift rift)
 
 static item PAY_PHONE = $item[closed-circuit pay phone];
 static item SHADOW_LODESTONE = $item[Rufus's shadow lodestone];
+static item DRUNKULA_WINE_GLASS = $item[Drunkula's wineglass];
+static item SPACE_TOURIST_PHASER = $item[Space Tourist Phaser];
 static effect SHADOW_AFFINITY = $effect[Shadow Affinity];
 static location SHADOW_RIFT = $location[Shadow Rift];
 static skill STEELY_EYED_SQUINT = $skill[Steely-Eyed Squint];
@@ -308,6 +322,17 @@ void validate_configuration()
 // ***************************
 // *        Setup            *
 // ***************************
+
+// We can adventure if overdrunk if we have (and can equip) Drunkula's wineglass.
+boolean overdrunk = my_inebriety() > inebriety_limit();
+boolean have_wineglass = (available_amount(DRUNKULA_WINE_GLASS) > 0 &&
+			  can_equip(DRUNKULA_WINE_GLASS));
+if (overdrunk) {
+    // Drunkula's wineglass disallows combat skills, spells, and items,
+    // forcing you to attack. This weapon converts physical attacks to
+    // elemental, bypassing shadow monster 100% physical resistance.
+    use_space_tourist_phaser = true;
+}
 
 void print_help()
 {
@@ -544,6 +569,7 @@ void check_quest_state()
     print();
     print( "Checking quest state..." );
 
+    // *** Shouldn't we just get the desired quest goal?
     int lodestones = item_amount(SHADOW_LODESTONE);
     if (lodestones > 0 ) {
 	print("You have " + lodestones + " shadow lodestones in inventory.", "red");
@@ -561,12 +587,89 @@ void check_quest_state()
 	exit;
     }
 
+    if (overdrunk) {
+	// If you are overdrunk, you can enter a shadow rift only if you
+	// have and can equip Drunkula's wine glass.
+	print("You are falling-down drunk.");
+	if (!have_wineglass) {
+	    print("Try later, after you sober up.");
+	    exit;
+	}
+	print("Fortunately, Drunkula's wineglass will let you proceed.");
+    }
+
     print( "Clean. Ready to go!" );
 }
 
 // ***************************
 // *        Tasks            *
 // ***************************
+
+void install_ccs()
+{
+    // (Create and) set CCS to use ShadowRiftConsult.ash
+    if ( use_consult_script && !set_ccs("shadow-rift") ) {
+	buffer ccs;
+	ccs.append("[ shadow rift ]\n");
+	ccs.append("consult ShadowRiftConsult.ash\n");
+	write_ccs(ccs, "shadow-rift");
+	set_ccs("shadow-rift");
+    }
+}
+
+void prepare_for_combat() {
+    int affinity_turns = have_effect(SHADOW_AFFINITY);
+
+    boolean will_fight()
+    {
+	// If will consume remaining turns of Shadow Affinity - and
+	// there are some to use - we will adventure and fight.
+	if (use_up_shadow_affinity && affinity_turns > 0) {
+	    return true;
+	}
+	// If we are ready to call back Rufus, no adventuring.
+	if (get_property("questRufus") == "step1" ) {
+	    return false;
+	} 
+	// If we want items and will buy them, no adventuring.
+	if (quest_goal == "items" && buy_shadow_items) {
+	    return false;
+	}
+	// Otherwise, we will be fighting
+	return true;
+    }
+
+    // If we will not fight, nothing more to do here
+    if (!will_fight()) {
+	return;
+    }
+
+    // *** Equip an item drop familiar?
+
+    // Mazimize for items.
+    string expression = "Item Drop";
+
+    // *** Allow user to augment maximization expression
+
+    // If overdrunk or user has chosen to attack rather than use
+    // combat spells and/or combat items
+    if (use_space_tourist_phaser) {
+	expression += " +equip Space Tourist Phaser";
+    }
+
+    maximize(expression, false);
+
+    // If we are using free turns, get Steely-Eyed Squint,
+    // which doubles Item Drop bonuses for one turn.
+    if (affinity_turns > 0 &&
+	have_skill(STEELY_EYED_SQUINT) &&
+	!get_property("_steelyEyedSquintUsed").to_boolean()) {
+	use_skill(1, STEELY_EYED_SQUINT);
+    }
+
+    // Install ShadowRiftConsult, if requested
+    install_ccs();
+}
 
 void call_rufus()
 {
@@ -594,11 +697,8 @@ void adventure_once(ShadowRift rift)
 void prepare_for_boss()
 {
     if (quest_goal == "entity") {
-	// What to do here?
-	// 
-	// How about restoring 100% HP to avoid insta-kill from the
-	// shadow scythe?
-	restore_hp(100);
+	// Restore to 100% HP to avoid insta-kill from the shadow scythe
+	restore_hp(my_maxhp() - my_hp());
 
 	switch (get_property("rufusQuestTarget")) {
 	case "shadow cauldron":
@@ -643,6 +743,7 @@ void fulfill_quest(ShadowRift rift)
 	    retrieve_item(3, it);
 	    return;
 	}
+
 	// If we are adventuring for items, we need to adventure in a
 	// rift that drops them.
 	ShadowRiftArray rifts = item_to_rifts[it];
@@ -662,35 +763,16 @@ void fulfill_quest(ShadowRift rift)
 	set_property("shadowLabyrinthGoal", labyrinth_goal);
     }
 
-    try {
-	cli_execute( "checkpoint" );
-	// Use an item drop familiar?
-	maximize("Item Drop, -equip broken champagne bottle", false);
+    while (get_property("encountersUntilSRChoice") > 0 &&
+	   get_property("questRufus") != "step1") {
+	adventure_once(rift);
+    }
 
-	int affinity_turns = have_effect(SHADOW_AFFINITY);
-	boolean free_turns_only = affinity_turns > 0;
+    prepare_for_boss();
 
-	// If we are using only free turns, get Steely-Eyed Squint,
-	// which doubles Item Drop bonuses for one turn.
-	if (free_turns_only &&
-	    have_skill(STEELY_EYED_SQUINT) &&
-	    !get_property("_steelyEyedSquintUsed").to_boolean()) {
-	    use_skill(1, STEELY_EYED_SQUINT);
-	}
-
-	while (get_property("encountersUntilSRChoice") > 0 &&
-	       get_property("questRufus") != "step1") {
-	    adventure_once(rift);
-	}
-
-	prepare_for_boss();
-
-	if (get_property("questRufus") != "step1") {
-	    // Fight the boss or traverse the Shadow Labyrinth
-	    adventure_once(rift);
-	}
-    } finally {
-	cli_execute( "outfit checkpoint" );
+    if (get_property("questRufus") != "step1") {
+	// Fight the boss or traverse the Shadow Labyrinth
+	adventure_once(rift);
     }
 }
 
@@ -753,39 +835,56 @@ void main(string parameters)
 	print("You accepted an '" + get_property("rufusQuestType") + "' quest to get " + get_property("rufusQuestTarget"));
     }
 
-    // If our goal is not already fulfilled, buy items or
-    // adventure for artifact, entity, or items
-    if (get_property("questRufus") == "started") {
-	fulfill_quest(rift);
-    } 
+    // Here follows all potential adventuring in the Shadow Rift.
+    string current_ccs = get_property("customCombatScript");
+    cli_execute( "checkpoint" );
+    try {
+	// If we will be fighting, maximize equipment and set CCS.
+	prepare_for_combat();
 
-    if (get_property("questRufus") != "step1") {
-	// Perhaps you didn't have enough items and were counting on
-	// free-turn adventuring to get them for you.  Or perhaps the
-	// shadow boss beat you.
-	abort("Could not fulfill Rufus's quest.");
-    }
-
-    if (use_up_shadow_affinity) {
-	// If we have left over turns of Shadow Affinity, use them up by
-	// adventuring in the Shadow Rift.
-	while (have_effect(SHADOW_AFFINITY) > 0) {
-	    adventure_once(rift);
+	// We already checked that Drunkula's wineglass is available.
+	// You need it to enter a Shadow Rift, even if no combat.
+	if (overdrunk) {
+	    equip(DRUNKULA_WINE_GLASS);
 	}
+
+	// If our goal is not already fulfilled, buy items or
+	// adventure for artifact, entity, or items
+	if (get_property("questRufus") == "started") {
+	    fulfill_quest(rift);
+	} 
+
+	if (get_property("questRufus") != "step1") {
+	    // Perhaps you didn't have enough items and were counting on
+	    // free-turn adventuring to get them for you. Or perhaps the
+	    // shadow boss beat you.
+	    abort("Could not fulfill Rufus's quest.");
+	}
+
+	// If we have left over turns of Shadow Affinity, use them up by
+	// adventuring in our selected Shadow Rift.
+	if (use_up_shadow_affinity) {
+	    while (have_effect(SHADOW_AFFINITY) > 0) {
+		adventure_once(rift);
+	    }
+	}
+
+	// Fulfill the quest with Rufus
+	call_rufus();
+	run_choice(1);
+
+	// You should now have Rufus's shadow lodestone
+	int lodestones = item_amount(SHADOW_LODESTONE);
+	if (lodestones == 0 ) {
+	    abort("You didn't get a shadow lodestone!");
+	}
+
+	// Adventure once more to collect your reward
+	collect_reward(rift);
+    } finally {
+	cli_execute( "outfit checkpoint" );
+	set_property("customCombatScript", current_ccs);
     }
-
-    // Fulfill the quest with Rufus
-    call_rufus();
-    run_choice(1);
-
-    // You should now have Rufus's shadow lodestone
-    int lodestones = item_amount(SHADOW_LODESTONE);
-    if (lodestones == 0 ) {
-	abort("You didn't get a shadow lodestone!");
-    }
-
-    // Adventure once more to collect your reward
-    collect_reward(rift);
 
     print("Done adventuring in the Shadow Rift!");
 }
