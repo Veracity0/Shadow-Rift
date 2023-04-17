@@ -46,6 +46,7 @@ string quest_goal = define_property( "VSR.QuestGoal", "string", "artifact" );
 // muscle               90-100 Muscle substats
 // mysticality          90-100 Mysticality substats
 // moxie                90-100 Moxie substats
+// mainstat             (whichever of the above corresponds to your class's mainstat)
 // effects              +3 turns to 3 random effects
 // maxHP                30 Shadow's Heart: Maximum HP +300%
 // maxMP                30 Shadow's Chill: Maximum MP +300
@@ -118,6 +119,10 @@ boolean use_consult_script = define_property( "VSR.UseShadowRiftConsult", "boole
 // effective in general.
 
 boolean use_space_tourist_phaser = define_property( "VSR.UseSpaceTouristPhaser", "boolean", "false" ).to_boolean();
+
+// We maximize for Item Drop. You can specify additional parameters for the maximizer expression
+
+string extra_maximizer_parameters = define_property( "VSR.ExtraMaximizerParameters", "string", "" );
 
 // ***************************
 // *     Shadow Rifts        *
@@ -244,6 +249,10 @@ static int[string] reward_option = {
     "forest": 3,
 };
 
+string plural_name(item it, int count) {
+    return (count == 1) ? it.name : it.plural;
+}
+
 // ***************************
 // *      Validation         *
 // ***************************
@@ -296,7 +305,8 @@ void validate_configuration()
 	valid = false;
     }
 
-    if ( !( labyrinth_goal_options contains labyrinth_goal ) ) {
+    if ( !( labyrinth_goal_options contains labyrinth_goal ) &&
+	 ( labyrinth_goal != "mainstat" ) ) {
 	print( "VSR.LabyrinthGoal: '" + labyrinth_goal + "' is invalid.", "red" );
 	valid = false;
     }
@@ -353,7 +363,7 @@ void print_help()
     print("artifact, entity, items");
     print();
     print("What reward to get at the Labyrinth of Shadows (VSR.LabyrinthGoal - 'items' only)");
-    print("muscle, mysticality, moxie, effects, maxHP, maxMP, resistance");
+    print("muscle, mysticality, moxie, (mainstat), effects, maxHP, maxMP, resistance");
     print();
     print("What reward to get with your shadow lodestone (VSR.QuestReward)");
     print("forge, waters, forest (once per day; chooses waters subsequently)");
@@ -491,6 +501,10 @@ void parse_parameters(string parameters)
 	case "random":
 	    rift_ingress = keyword;
 	    continue;
+	case "mainstat":
+	    labyrinth_goal = my_primestat().to_string().to_lower_case();
+	    print("You want " + labyrinth_goal + " substats from the Labyrinth of Shadows.");
+	    continue;
 	case "onlyfree":
 	    free_turns_only = true;
 	    continue;
@@ -564,15 +578,35 @@ boolean confirmed_free_adventures()
     return user_confirm(message);
 }
 
+// Forward reference
+void collect_reward(ShadowRift rift);
+
 void check_quest_state()
 {
     print();
     print( "Checking quest state..." );
 
-    // *** Shouldn't we just get the desired quest goal?
+    if (overdrunk) {
+	// If you are overdrunk, you can enter a shadow rift only if you
+	// have and can equip Drunkula's wine glass.
+	print("You are falling-down drunk.");
+	if (!have_wineglass) {
+	    print("Try later, after you sober up.");
+	    exit;
+	}
+	print("Fortunately, Drunkula's wineglass will let you proceed.");
+    }
+
     int lodestones = item_amount(SHADOW_LODESTONE);
     if (lodestones > 0 ) {
-	print("You have " + lodestones + " shadow lodestones in inventory.", "red");
+	print("You have " + lodestones + " " + SHADOW_LODESTONE.plural_name(lodestones) +
+	      " in inventory. Let's turn one in!");
+	print("You want to enter " + rift_name(rift_ingress) + ".");
+	ShadowRift rift = ingress_to_rift(rift_ingress);
+	if (rift_ingress == "random") {
+	    print("We chose " + rift.loc.to_string() + " for you.");
+	}
+	collect_reward(rift);
 	exit;
     }
 
@@ -587,35 +621,12 @@ void check_quest_state()
 	exit;
     }
 
-    if (overdrunk) {
-	// If you are overdrunk, you can enter a shadow rift only if you
-	// have and can equip Drunkula's wine glass.
-	print("You are falling-down drunk.");
-	if (!have_wineglass) {
-	    print("Try later, after you sober up.");
-	    exit;
-	}
-	print("Fortunately, Drunkula's wineglass will let you proceed.");
-    }
-
     print( "Clean. Ready to go!" );
 }
 
 // ***************************
 // *        Tasks            *
 // ***************************
-
-void install_ccs()
-{
-    // (Create and) set CCS to use ShadowRiftConsult.ash
-    if ( use_consult_script && !set_ccs("shadow-rift") ) {
-	buffer ccs;
-	ccs.append("[ shadow rift ]\n");
-	ccs.append("consult ShadowRiftConsult.ash\n");
-	write_ccs(ccs, "shadow-rift");
-	set_ccs("shadow-rift");
-    }
-}
 
 void prepare_for_combat() {
     int affinity_turns = have_effect(SHADOW_AFFINITY);
@@ -649,7 +660,10 @@ void prepare_for_combat() {
     // Mazimize for items.
     string expression = "Item Drop";
 
-    // *** Allow user to augment maximization expression
+    // The user can augment the maximization expression
+    if (extra_maximizer_parameters != "") {
+	expression += " " + extra_maximizer_parameters;
+    }
 
     // If overdrunk or user has chosen to attack rather than use
     // combat spells and/or combat items
@@ -667,8 +681,10 @@ void prepare_for_combat() {
 	use_skill(1, STEELY_EYED_SQUINT);
     }
 
-    // Install ShadowRiftConsult, if requested
-    install_ccs();
+    // Tell KoLmafia to use ShadowRiftConsult, if requested
+    if ( use_consult_script ) {
+	set_property("battleAction", "consult ShadowRiftConsult.ash");
+    }
 }
 
 void call_rufus()
@@ -686,7 +702,10 @@ void adventure_once(ShadowRift rift)
 	if (checkpoint) {
 	    cli_execute( "checkpoint" );
 	}
-	adv1(rift.loc, 0);
+	if (!adv1(rift.loc, 0)) {
+	    print("Aborting automation.", "red");
+	    exit;
+	}
     } finally {
 	if (checkpoint) {
 	    cli_execute( "outfit checkpoint" );
@@ -783,7 +802,20 @@ void collect_reward(ShadowRift rift)
 	reward = "waters";
     }
     set_property("choiceAdventure1500", reward_option[reward]);
-    adventure_once(rift);
+
+    // You still need a wineglass to collect a reward if overdrunk.
+    boolean checkpoint = overdrunk && !have_equipped(DRUNKULA_WINE_GLASS);
+    try {
+	if (checkpoint) {
+	    cli_execute( "checkpoint" );
+	    equip(DRUNKULA_WINE_GLASS);
+	}
+	adventure_once(rift);
+    } finally {
+	if (checkpoint) {
+	    cli_execute( "outfit checkpoint" );
+	}
+    }
 }    
 
 // ***************************
@@ -836,7 +868,7 @@ void main(string parameters)
     }
 
     // Here follows all potential adventuring in the Shadow Rift.
-    string current_ccs = get_property("customCombatScript");
+    string current_battle_action = get_property("battleAction");
     cli_execute( "checkpoint" );
     try {
 	// If we will be fighting, maximize equipment and set CCS.
@@ -883,7 +915,7 @@ void main(string parameters)
 	collect_reward(rift);
     } finally {
 	cli_execute( "outfit checkpoint" );
-	set_property("customCombatScript", current_ccs);
+	set_property("battleAction", current_battle_action);
     }
 
     print("Done adventuring in the Shadow Rift!");
