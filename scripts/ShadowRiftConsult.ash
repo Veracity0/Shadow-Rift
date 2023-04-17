@@ -116,6 +116,7 @@ static item DRUNKULA = $item[ Drunkula's wineglass ];
 void main(int initround, monster foe, string page)
 {
     boolean must_attack = have_equipped( DRUNKULA );
+    boolean no_attack = ( foe == $monster[ shadow matrix ] );
     boolean no_combat_spells = ( foe == $monster[ shadow orrery ] );
     boolean can_funksling = have_skill(FUNKSLINGING);
     boolean have_silent_treatment = have_skill(SILENT_TREATMENT);
@@ -138,6 +139,22 @@ void main(int initround, monster foe, string page)
 	}
     }
 
+    boolean hurl()
+    {
+	int items = item_amount( combat_item );
+	// You don't NEED Funkslinging, but it will finish off the
+	// monster in fewer rounds.
+	if (items > 1 && can_funksling) {
+	    page = throw_items( combat_item, combat_item );
+	    return true;
+	}
+	if (items == 1) {
+	    page = throw_item( combat_item );
+	    return true;
+	}
+	return false;
+    }
+
     // Finish the monster off!
     void slay()
     {
@@ -145,18 +162,19 @@ void main(int initround, monster foe, string page)
 	    if ( must_attack ) {
 		page = attack();
 	    } else if ( no_combat_spells ) {
-		int items = item_amount( combat_item );
-		// You don't NEED Funkslinging, but it will finish off
-		// the monster in fewer rounds.
-		if (items == 0) {
+		// shadow orrery: items then attack
+		if ( !hurl() ) {
 		    page = attack();
-		} else if (items > 1 && can_funksling) {
-		    page = throw_items( combat_item, combat_item );
-		} else {
-		    page = throw_item( combat_item );
 		}
 	    } else if ( combat_spell != NO_SKILL ) {
 		page = use_skill( combat_spell );
+	    } else if ( no_attack ) {
+		// shadow matrix: spells then items then abort
+		if ( !hurl() ) {
+		    abort("The " + foe + " requires a combat spell or combat item." +
+			  " You have no combat spell configured and you are out of " + combat_item.plural + "." +
+			  " You are doomed.");
+		}
 	    } else {
 		page = attack();
 	    }
@@ -199,13 +217,23 @@ void main(int initround, monster foe, string page)
 	shun();
 	slay();
 	return;
+    case $monster[ shadow matrix ]:
+	// This boss blocks physical attacks.
+	if (must_attack) {
+	    abort("The " + foe + " requires a combat spell or combat item, but you must attack. You are doomed.");
+	}
+	// Fortunately, spells and items work. Abort if neither is
+	// configured.
+	if (combat_spell == NO_SKILL && combat_item == NO_ITEM) {
+	    abort("The " + foe + " requires a combat spell or combat item, but neither is configured.");
+	}
+	shun();
+	slay();
+	return;
     case $monster[ shadow cauldron ]:
     case $monster[ shadow tongue ]:
 	// These bosses deal passive elemental damage, but otherwise are
 	// not a problem, assuming you have enough HP.
-    case $monster[ shadow matrix ]:
-	// This boss blocks physical attacks. Fortunately, spells and
-	// items work.
     case $monster[ shadow spire ]:
 	// This boss does 30-35% of your Maximum HP every time it hits
 	// you.  We have time to negate its resistances before defeating
