@@ -39,15 +39,15 @@ import <vprops.ash>;
 //
 // shadow cauldron  lose    300 (+5)    300 (+5)    1000 (+10)  0 (+1)    passive hot damage
 // shadow matrix    1000    300 (+5)    300 (+5)     500 (+10)  0 (+1)    blocks physical attacks
-// shadow orrery    lose    300 (+5)    300 (+5)     250 (+10) 50 (+1)    reflects skills
+// shadow orrery    lose    300 (+5)    300 (+5)     250 (+10) 50 (+1)    reflects spells
 // shadow scythe    win     300 (+5)    300 (+5)      50 (+10)  0 (+1)    deals 90% Maximum HP
 // shadow spire     lose    300 (+5)    300 (+5)     500 (+10)  0 (+1)    deals 30-35% Maximum HP
 // shadow tongue    200     300 (+5)    300 (+5)     500 (+10)  0 (+1)    passive sleaze damage
 
 // Observations:
 //
-// With 100% physical resistance, you need skills to do enough damage.
-// The shadow orrery reflects skills, but combat items can provide elemental damage
+// With 100% physical resistance, you need spells to do enough damage.
+// The shadow orrery reflects spells, but combat items can provide elemental damage.
 // The shadow scythe will kill you on its second hit.
 // The shadow spire will kill you in 3-4 hits
 //
@@ -59,7 +59,7 @@ import <vprops.ash>;
 //
 // Saucegeyser does a lot of elemental damage. It suffices by itself for
 // shadow monsters that have not scaled up their elemental resistance
-// TOO much. Caveat: shadow orrery reflects skills.
+// TOO much. Caveat: shadow orrery reflects spells.
 //
 // Elemental combat items work nicely, although scaling elemental
 // resistance affects the damage. I've used love songs, for example, to
@@ -68,14 +68,14 @@ import <vprops.ash>;
 // you throw it, and the same percentage at the end of the round. On top
 // of that, it does a decaying amount of damage in subsequent rounds.
 //
-// This script will use those skills and items by default, although you
+// This script will use those spells and items by default, although you
 // can configure others, if desired.
 
 // ***************************
 // *     Configuration       *
 // ***************************
 
-// Which combat skill to use.
+// Which combat spell to use.
 skill combat_spell = define_property( "VSR.CombatSpell", "skill", "Saucegeyser" ).to_skill();
 
 // Which combat item to use.
@@ -88,8 +88,9 @@ item combat_item = define_property( "VSR.CombatItem", "item", "gas can" ).to_ite
 static skill NO_SKILL = $skill[ none ];
 static item NO_ITEM = $item[ none ];
 
-// You don't HAVE to use a combat spell or item, if your equipment adds
-// enough elemental damage to your attack, but they'll speed up combat.
+// You don't HAVE to use a combat spell or item (except against a shadow
+// matrix), if your equipment adds enough elemental damage to your
+// attack, but they'll speed up combat.
 
 if ( !have_skill( combat_spell ) || ( combat_spell.type != "combat" ) ) {
     combat_spell = NO_SKILL;
@@ -109,7 +110,7 @@ static skill SILENT_TREATMENT = $skill[ Silent Treatment ];
 // A passive skill which lets you throw two combat items at once.
 static skill FUNKSLINGING = $skill[ Ambidextrous Funkslinging ];
 
-// An item which forces you to attack, rather than use skills and items.
+// An item which forces you to attack, rather than use skills, spells, and items.
 static item DRUNKULA = $item[ Drunkula's wineglass ];
 
 void main(int initround, monster foe, string page)
@@ -127,7 +128,7 @@ void main(int initround, monster foe, string page)
 	}
     }
 
-    // Your combat spells should do enough elemental damage by itself,
+    // Your combat spell should do enough elemental damage by itself,
     // until the monsters have scaled too much, but Silent Treatment
     // will make it effective for even heavily scaled monsters.
     void shun()
@@ -187,9 +188,9 @@ void main(int initround, monster foe, string page)
 	return;
     case $monster[ shadow scythe ]:
 	// This boss does 90% of your Maximum HP every round. Since it
-	// always gets the drop, unless you have equipment or a skill
-	// that makes it miss or skip its first attack, you need to
-	// one-shot it. Fortunately, it has relatively few HP.
+	// always gets the drop, unless you have equipment or a passive
+	// skill that makes it miss or skip its first attack, you need
+	// to one-shot it. Fortunately, it has relatively few HP.
 	slay();
 	return;
     case $monster[ shadow orrery ]:
@@ -203,7 +204,8 @@ void main(int initround, monster foe, string page)
 	// These bosses deal passive elemental damage, but otherwise are
 	// not a problem, assuming you have enough HP.
     case $monster[ shadow matrix ]:
-	// This boss blocks physical attacks. Fortunately, skills work.
+	// This boss blocks physical attacks. Fortunately, spells and
+	// items work.
     case $monster[ shadow spire ]:
 	// This boss does 30-35% of your Maximum HP every time it hits
 	// you.  We have time to negate its resistances before defeating
