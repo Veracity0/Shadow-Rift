@@ -124,6 +124,19 @@ boolean use_space_tourist_phaser = define_property( "VSR.UseSpaceTouristPhaser",
 
 string extra_maximizer_parameters = define_property( "VSR.ExtraMaximizerParameters", "string", "" );
 
+// Should we use a Platinum Yendorian Express Card to extend Shadow
+// Affinity et. al. by 5 turns?
+//
+// We'll use it to gain 5 extra turns of Shadow Affinity - 5 additional
+// free fight.  Seems like a strong choice to use the card for this
+// purpose, but perhaps you have something you prefer, so, default is
+// false, and you have to opt in.
+//
+// If you have autoSatisfyWithStash set to true, we will do special
+// shenanigans to fetch & retrieve the card from your clan stash.
+
+boolean use_pyec = define_property( "VSR.UsePYEC", "boolean", "false" ).to_boolean();
+
 // ***************************
 // *     Shadow Rifts        *
 // ***************************
@@ -232,6 +245,7 @@ string rift_items(ShadowRift rift)
 static item PAY_PHONE = $item[closed-circuit pay phone];
 static item SHADOW_LODESTONE = $item[Rufus's shadow lodestone];
 static item DRUNKULA_WINE_GLASS = $item[Drunkula's wineglass];
+static item PYEC = $item[Platinum Yendorian Express Card];
 static item SPACE_TOURIST_PHASER = $item[Space Tourist Phaser];
 static effect SHADOW_AFFINITY = $effect[Shadow Affinity];
 static location SHADOW_RIFT = $location[Shadow Rift];
@@ -628,7 +642,61 @@ void check_quest_state()
 // *        Tasks            *
 // ***************************
 
-void prepare_for_combat() {
+void platinum_yendorian_express_card()
+{
+    // If we don't want to use a PYEC, punt
+    if ( !use_pyec ) {
+	return;
+    }
+
+    // If we have already used it today, can't use again.
+    if ( get_property( "expressCardUsed" ).to_boolean() ) {
+	return;
+    }
+
+    boolean should_use_stash = get_property( "autoSatisfyWithStash" ).to_boolean();
+    boolean from_stash = false;
+    boolean available = false;
+
+    // Special shenanigans if might borrow/return from clan stash
+    if ( should_use_stash ) {
+	// See if it is available without using the stash
+	try {
+	    set_property( "autoSatisfyWithStash", false );
+	    available = available_amount( PYEC ) > 0;
+	} finally {
+	    set_property( "autoSatisfyWithStash", true );
+	}
+
+	// If not, see if it is available with the stash
+	if ( !available ) {
+	    // Refresh the stash
+	    get_stash();
+	    from_stash = available = available_amount( PYEC ) > 0;
+	}
+    } else {
+	available = available_amount( PYEC ) > 0;
+    }
+
+    // If we can't get one, we can't use one
+    if ( !available ) {
+	return;
+    }	
+
+    // Even though we verified that a PYEC is available, retrieve_item()
+    // can fail, since a PYEC is a karma-regulated item in a clan stash.
+    if ( retrieve_item( 1, PYEC ) ) {
+	use( 1, PYEC );
+
+	// If we borrowed from the stash, put it back
+	if ( from_stash ) {
+	    put_stash( 1, PYEC );
+	}
+    }
+}
+
+void prepare_for_combat()
+{
     int affinity_turns = have_effect(SHADOW_AFFINITY);
 
     boolean will_fight()
@@ -679,6 +747,11 @@ void prepare_for_combat() {
 	have_skill(STEELY_EYED_SQUINT) &&
 	!get_property("_steelyEyedSquintUsed").to_boolean()) {
 	use_skill(1, STEELY_EYED_SQUINT);
+    }
+
+    // If we are using free turns, use PYEC to extend by 5 turns.
+    if (affinity_turns > 0) {
+	platinum_yendorian_express_card();
     }
 
     // Tell KoLmafia to use ShadowRiftConsult, if requested
