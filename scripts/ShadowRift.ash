@@ -49,7 +49,7 @@ string quest_goal = define_property( "VSR.QuestGoal", "string", "artifact" );
 // mainstat             (whichever of the above corresponds to your class's mainstat)
 // effects              +3 turns to 3 random effects
 // maxHP                30 Shadow's Heart: Maximum HP +300%
-// maxMP                30 Shadow's Chill: Maximum MP +300
+// maxMP                30 Shadow's Chill: Maximum MP +300%
 // resistance           30 Shadow's Thickness: +5 Spooky, Hot, Sleaze resistance
 
 string labyrinth_goal = define_property( "VSR.LabyrinthGoal", "string", "effects" );
@@ -58,7 +58,7 @@ string labyrinth_goal = define_property( "VSR.LabyrinthGoal", "string", "effects
 //
 // forge                Opens Shadow Forge until you use an adventure.
 //                      You can craft special shadow items from mundane shadow items.
-// waters               30 turns of Shadow Waters:
+// fountain             (or waters) 30 turns of Shadow Waters:
 //                      Initiative: +100, Item Drop: +100, Meat Drop: +200, Combat Rate: -10
 // forest               (Once per day) 2-3 each of the 3 mundane items from the
 //                      specific ingress you used to enter the Shadow Rift
@@ -108,7 +108,24 @@ boolean buy_shadow_items = define_property( "VSR.BuyShadowItems", "boolean", "tr
 
 boolean use_up_shadow_affinity = define_property( "VSR.UseUpShadowAffinity", "boolean", "true" ).to_boolean();
 
-// Should we use our custome ShadowRiftConsult script for combats?
+// Should we use a Platinum Yendorian Express Card to extend active effects by 5 turns?
+//
+// We'll use it to gain 5 extra turns of Shadow Affinity - 5 additional
+// free fights.  It seems like a strong choice to use the card for this
+// purpose, but it is optional.
+//
+// If you have autoSatisfyWithStash set to true, we will do special
+// shenanigans to fetch & retrieve the card from your clan stash.
+
+boolean use_pyec = define_property( "VSR.UsePYEC", "boolean", "true" ).to_boolean();
+
+// *** Combat Preparation
+
+// We maximize for Item Drop. You can specify additional parameters for the maximizer expression
+
+string extra_maximizer_parameters = define_property( "VSR.ExtraMaximizerParameters", "string", "" );
+
+// Should we use our custome ShadowRiftConsult.ash script for combats?
 
 boolean use_consult_script = define_property( "VSR.UseShadowRiftConsult", "boolean", "true" ).to_boolean();
 
@@ -120,22 +137,26 @@ boolean use_consult_script = define_property( "VSR.UseShadowRiftConsult", "boole
 
 boolean use_space_tourist_phaser = define_property( "VSR.UseSpaceTouristPhaser", "boolean", "false" ).to_boolean();
 
-// We maximize for Item Drop. You can specify additional parameters for the maximizer expression
-
-string extra_maximizer_parameters = define_property( "VSR.ExtraMaximizerParameters", "string", "" );
-
-// Should we use a Platinum Yendorian Express Card to extend Shadow
-// Affinity et. al. by 5 turns?
+// Should we cast Steely-Eyed Squint to double item drops from shadow monster combats?
 //
-// We'll use it to gain 5 extra turns of Shadow Affinity - 5 additional
-// free fight.  Seems like a strong choice to use the card for this
-// purpose, but perhaps you have something you prefer, so, default is
-// false, and you have to opt in.
-//
-// If you have autoSatisfyWithStash set to true, we will do special
-// shenanigans to fetch & retrieve the card from your clan stash.
+// This is usable once a day and lasts for a single round. Since item
+// drop in the Shadow Rift is reduced by 80%, and Shadow Affinity gives
+// you 11 free fights a day, this seems like a good use for the skill,
+// but it is optional.
 
-boolean use_pyec = define_property( "VSR.UsePYEC", "boolean", "false" ).to_boolean();
+boolean cast_steely_eyed_squint = define_property( "VSR.CastSteelyEyedSquint", "boolean", "true" ).to_boolean();
+
+// Should we cast Bend Hell to double Elemental and Elemental Spell damage in shadow monster combats?
+//
+// This is usable once a day and lasts for a single round. Since shadow
+// monsters have scaling elemental resistance - and the bosses can have
+// too much HP for a lower-level character to handle - this seems like a
+// good use for the skill, but it is optional.
+//
+// If you will be using Silent Treatment, which eliminates resistances,
+// it is less useful.
+
+boolean cast_bend_hell = define_property( "VSR.CastBendHell", "boolean", "true" ).to_boolean();
 
 // ***************************
 // *     Shadow Rifts        *
@@ -250,6 +271,7 @@ static item SPACE_TOURIST_PHASER = $item[Space Tourist Phaser];
 static effect SHADOW_AFFINITY = $effect[Shadow Affinity];
 static location SHADOW_RIFT = $location[Shadow Rift];
 static skill STEELY_EYED_SQUINT = $skill[Steely-Eyed Squint];
+static skill BEND_HELL = $skill[Bend Hell];
 
 static int[string] rufus_option = {
     "entity": 1,
@@ -380,7 +402,7 @@ void print_help()
     print("muscle, mysticality, moxie, (mainstat), effects, maxHP, maxMP, resistance");
     print();
     print("What reward to get with your shadow lodestone (VSR.QuestReward)");
-    print("forge, waters, forest (once per day; chooses waters subsequently)");
+    print("forge, fountain (or waters), forest (once per day; chooses waters subsequently)");
     print();
     print("Which shadow rift ingress to use for getting the quest reward (VSR.RiftIngress)");
     print("(also used for adventuring, except for 'items', if it doesn't have what Rufus wants)");
@@ -519,6 +541,9 @@ void parse_parameters(string parameters)
 	    labyrinth_goal = my_primestat().to_string().to_lower_case();
 	    print("You want " + labyrinth_goal + " substats from the Labyrinth of Shadows.");
 	    continue;
+	case "fountain":
+	    quest_reward = "waters";
+	    continue;
 	case "onlyfree":
 	    free_turns_only = true;
 	    continue;
@@ -644,11 +669,6 @@ void check_quest_state()
 
 void platinum_yendorian_express_card()
 {
-    // If we don't want to use a PYEC, punt
-    if ( !use_pyec ) {
-	return;
-    }
-
     // If we have already used it today, can't use again.
     if ( get_property( "expressCardUsed" ).to_boolean() ) {
 	return;
@@ -743,19 +763,29 @@ void prepare_for_combat()
 
     // If we are using free turns, get Steely-Eyed Squint,
     // which doubles Item Drop bonuses for one turn.
-    if (affinity_turns > 0 &&
-	have_skill(STEELY_EYED_SQUINT) &&
-	!get_property("_steelyEyedSquintUsed").to_boolean()) {
-	use_skill(1, STEELY_EYED_SQUINT);
+    if (affinity_turns > 0 && cast_steely_eyed_squint) {
+	if (have_skill(STEELY_EYED_SQUINT) &&
+	    !get_property("_steelyEyedSquintUsed").to_boolean()) {
+	    use_skill(1, STEELY_EYED_SQUINT);
+	}
     }
 
-    // If we are using free turns, use PYEC to extend by 5 turns.
-    if (affinity_turns > 0) {
+    // If we are using free turns, get Bend Hell, which doubles
+    // Elemental damage and spell damage bonuses for one turn.
+    if (affinity_turns > 0 && cast_bend_hell) {
+	if (have_skill(BEND_HELL) &&
+	    !get_property("_bendHellUsed").to_boolean()) {
+	    use_skill(1, BEND_HELL);
+	}
+    }
+
+    // If we are using free turns, use PYEC to extend all effects by 5 turns.
+    if (affinity_turns > 0 && use_pyec) {
 	platinum_yendorian_express_card();
     }
 
-    // Tell KoLmafia to use ShadowRiftConsult, if requested
-    if ( use_consult_script ) {
+    // If you want to use ShadowRiftConsult, tell KoLmafia to do so
+    if (use_consult_script) {
 	set_property("battleAction", "consult ShadowRiftConsult.ash");
     }
 }
