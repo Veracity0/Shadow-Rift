@@ -1,7 +1,7 @@
-# Shadow Rift
+# ShadowRift
 KoLmafia scripting for Shadow Rifts in Kingdom of Loathing
 
-Shadow Rifts in Kingdom of Loathing grant access to a strange a fearsome realm, populated by fearsome shadowy horrors. The are an ongoing world event, but will be permanently accessable to adventures in the Avatar of Shadows over Loathing path - or to those who have purchased a closed-circuit telephone system, which allows them to call Rufus and accept chores (quests, if you prefer) for him, for which he grants valuable rewards.
+Shadow Rifts in the Kingdom of Loathing grant access to a strange realm, populated by fearsome shadowy horrors. They are an ongoing world event, but will be permanently accessible in the Avatar of Shadows over Loathing path - or to those who have purchased a closed-circuit telephone system, which allows them to call Rufus and accept chores (quests, if you prefer) for him, for which he grants valuable rewards.
 
 This script automates accepting/fulfilling/redeeming Rufus's quests.
 
@@ -23,9 +23,9 @@ If you complete his chore, Rufus will reward you with a shadow lodestone. Advent
 
 1) forge - access to the Shadow Forge (until you spend an adventure) where you can craft stuff from shadow items.
 2) fountain - 30 turns of Shadow Waters, which grants +100 to Initiative, Meat Drop, and Item Drop
-3) forest - 2-3 each of three different shadow items, determmined by which Shadow Rift you entered. You can get this reward once per day.
+3) forest - 2-3 each of three different shadow items, determined by which Shadow Rift you entered. You can get this reward once per day.
 
-You can accept as many quests per day as you want from Rusus (although only the first will not use turns), with the caveat that every combat you have in the Shadow Rift makes all subsequent fights that same day harder; shadow monster Attack, Defense, HP, and Elemental Resistance scales.
+You can accept as many quests per day as you want from Rusus (although only the first will not use turns), with the caveat that every combat you have in the Shadow Rift makes all subsequent fights that same day harder; shadow monster Attack, Defense, HP, and Elemental Resistance scale.
 
 ShadowRift will do everything you need to handle all three kinds of quest:
 
@@ -48,7 +48,7 @@ git install Veracity0/shadow-rift
 
 First of all, decide what kind of quest you are interested in.
 - artifact is the easiest; regular shadow monsters have no special abilities.
-- entity is more difficult and more profitable: each shadow boss drops two guarenteed items  if you beat it.
+- entity is more difficult and more profitable: each shadow boss drops two guarenteed items if you beat it.
 - items is **probably** of interest only if you are already have the items (or are willing to buy them), since Item Drop is reduced by 80% in the Shadow Rifts and hoping to farm them in 11 free turns is problematic. But trading in items - and getting a reward - without farming takes no turns and leaves Shadow Affinity untouched, ready for another quest (and reward).
 
 What about Shadow Affinity?
@@ -85,7 +85,7 @@ ShadowRift artifact pyramid forest onlyfree allfree
 ```
 ShadowRift entity fluid waters notonlyfree
 ```
-6) Take an items quest and attempt to farm what is needed, regardless of free turns. If you get the Shadow Labyrinth, get Moxie subtats. Open the Shadow Forge, if you succeed in fulfilling the quest before then.
+6) Take an items quest and attempt to farm what is needed, regardless of free turns. If you get the Shadow Labyrinth, get Moxie substats. Open the Shadow Forge, if you succeed in fulfilling the quest before then.
 I don't recommend this, since, contrary to what you might have intended, even though you are using not-free turns, it limits your liability to 10 turns spent by stopping after the Labyrinth of Shadows.
 You can simply repeat the command and try again.
 ```
@@ -98,7 +98,7 @@ ShadowRift items shadow flame moxie forge notonlyfree
 
 1) Accepting a quest, fulfilling it, gaining the shadow lodestone, and NOT using it to collect the reward.
 This is how you would accumulate multiple shadow lodestones.
-I'm not sure why you would want to do that, since the next quest you take and try to fulfill will use the lodestone. The one exception would be accepting and fulfilling an items quest by buying items.
+I'm not sure why you would want to do that, since the next quest you take and try to fulfill will use the lodestone first. The one exception would be accepting and fulfilling an items quest by buying items.
 
 2) Running turns in the Shadow Rift without accepting a quest.
 I suppose you might want to farm specific items, and perhaps ShadowRift's item drop maximization, equipment usage, etc., would be useful.
@@ -126,6 +126,7 @@ Here are the configuration properties.
 | ```VSR.BuyShadowItems``` | true or false | true | Whether to buy items to fulfill "items" quest
 | ```VSR.UseUpShadowAffinity``` | true or false | true | Whether to use up Shadow Affinity after fulfilling quest
 | ```VSR.UsePYEC``` | true or false | true | Whether to use Platinum Yendorian Express Card to extand Shadow Affinity by 5 turns
+| ```VSR.ChosenFamiliar``` | (familiar) or none | none | If not "none", which familiar to bring with you
 | ```VSR.ExtraMaximizerParameters``` | (string) | "" | Extra parameters to usewhen maximizing for item drop
 | ```VSR.UseShadowRiftConsult``` | true or false | true | Whether to automatically use ShadowRiftConsult for combats
 | ```VSR.UseSpaceTouristPhaser``` | true or false | false | Whether to acquire and equip Space Tourist Phaser for use in combats
@@ -152,7 +153,7 @@ The ingress you use determines which monsters you fight and which items will dro
 | plains | The Nearby Plains | bat, cow, spider | sausage, skin, venom
 | town_right | The Right Side of the Tracks | cow, guy, prism | skin, bread, glass
 
-The Labyrinth of Shadows contains the artifact you need (if on an artifact quest) and various little rewards (if on items - or no - quest)
+The Labyrinth of Shadows contains the artifact you need (if on an artifact quest) and various little rewards (if on an ```items``` - or no - quest)
 
 | reward | description |
 | :--- | :--- |
@@ -173,7 +174,7 @@ Order does not matter.
 Most of the keywords override configuration values, as documented above.
 Some of them perform a calculation to override a value.
 
-A handful of them are essentially stand-alone commands:
+Some of them are essentially stand-alone commands:
 ```
 ShadowRift help
 ```
@@ -190,7 +191,7 @@ Visit Rufus and see what chores he has in mind for you. This will print out the 
 ```
 ShadowRift default
 ```
-If an ASH script's ```main``` function has properties, KoLmafia requires you to put them on the command line or it will pop up a prompt.
+If an ASH script's ```main``` function has parameters, KoLmafia requires you to put them on the command line or it will pop up a prompt.
 If all of your configuration variables are acceptable as-is and you don't want to give them as command-line arguments, this avoids the prompt.
 
 Others let you override configuration preferences:
@@ -205,11 +206,11 @@ Others let you override configuration preferences:
 | ```VSR.RiftIngress``` | desertbeach forestvillage mclargehuge beanstalk manor3 8bit pyramid giantcastle woods hiddencity cemetery plains town_right |
 |  | [shadow] bread brick flame fluid glass ice nectar sausage sinew skin stick venom | shadow is optional. A random rift where the item can be found.|
 |  | random | A random rift. For ```items``` quest, one with desired item |
-| VSR.FreeTurnsOnly | onlyfree | Combats must be free |
+| ```VSR.FreeTurnsOnly``` | onlyfree | Combats must be free |
 | | notonlyfree | Combats need not be free |
-| VSR.BuyShadowItems | buy | Buy shadow items for ```items``` quest |
+| ```VSR.BuyShadowItems``` | buy | Buy shadow items for ```items``` quest |
 | | nobuy | Adventure for shadow items |
-| VSR.UseUpShadowAffinity | allfree | Use up remaining Shadow Affinity |
+| ```VSR.UseUpShadowAffinity``` | allfree | Use up remaining Shadow Affinity |
 | | notallfree | Do not use up Shadow Affinity |
 
 ### ShadowRiftConsult strategy
@@ -220,16 +221,16 @@ During automation, KoLmafia will invoke ShadowRiftConsult for each fight.
 
 In a Shadow Rift, you can encounter mundane shadow monsters (three types per rift ingress) and, on an entity quest, one of six kinds of shadow bosses. All of these have base values of Attack/Defense/HP, which scale up with the number of combats you've had today with Shadow Rift monsters. All of them are 100% Physical reistant, and have some amount of Elemental resistance, which similarly scales.
 
-ShadowRiftConsult is a consult script, so all it can do is whatever you can do in combat: steal, use combat skills, cast combat spells, use combat ideas, and so on.
+ShadowRiftConsult is a consult script, so all it can do is whatever you can do in combat: steal, use combat skills, cast combat spells, use combat items, and so on.
 
 1) For mundane shadow monsters (less dangerous), if you can pickpocket, do so. Item Drops are reduced by 80% in the Shadow Rifts, but that doesn't apply to pickpocket.
 2) If you have the "Silent Treatment" skill, which negates physical and elemental resistances, cast it. (Except for the shadow scythe, which will kill you on the second round.)
-3) Then repeat doing your configured choice of action.
+3) Then repeat, doing your configured choice of action.
    - If you have a combat spell configured, cast it
    - Otherwise, attack
 4) Exception: shadow orrery reflects combat spells
    - If you have a combat item configured, throw (or funksling) the item
-   - Iff you have no items configured or are out of items, attack
+   - If you have no items configured or are out of items, attack
 5) Exception: shadow matrix blocks attacks
    - If you have a combat spell configured, cast it
    - If you have no spell configured, use configured item
@@ -249,13 +250,13 @@ Two of the above preferences are used by ShadowRiftConsult, as opposed to Shadow
 
 1) February 11, 2023: Shadow Rifts appear all over the Kingdom as a (seeming) World Event, a temporary tie-in to Asymmetric's Shadows over Loathing game.
 
-2) February 15, 2023:  KoL's Spring Challenge Path '23 rolled out: Avatars of Shadows over Loathing.
+2) February 15, 2023:  KoL's Spring Challenge Path '23 rolls out: Avatar of Shadows over Loathing.
 
 Shadow Rifts become a permanent part of the game, as long as your character is on that Challenge Path.
 
 3)  March 3, 2023: A new turn-free choice adventure - The Shadow Labyrinth - appears every 11 turns spent adventuring in a Shadow Rift.
 
-4)  March 3, 2023: The March Item of the Month, the "closed-circuit phone system" rolled out to Subscribers.
+4)  March 3, 2023: The March Item of the Month, the "closed-circuit phone system" rolls out to Subscribers.
 
 Shadow Rifts become a permanent part of the game, regardless of your character class, for owners of this IOTM.
 

@@ -121,6 +121,15 @@ boolean use_pyec = define_property( "VSR.UsePYEC", "boolean", "true" ).to_boolea
 
 // *** Combat Preparation
 
+// You probably want an Item Drop familiar. Perhaps we could look at your terrarium and
+// pick one, but that could be tricky. A Jumpsuited Hound Dog is a fine choice, but lacking
+// such, which one? One with stats? Elemental attacks? Special drops? Perhaps, even if you
+// have a Hound Dog, you'd prefer to use your (lubricated) Robortender.
+//
+// We'll let you specify one, or "none" to mean "whichever familiar is active".
+
+familiar chosen_familiar = define_property( "VSR.ChosenFamiliar", "familiar", "none" ).to_familiar();
+
 // We maximize for Item Drop. You can specify additional parameters for the maximizer expression
 
 string extra_maximizer_parameters = define_property( "VSR.ExtraMaximizerParameters", "string", "" );
@@ -355,6 +364,13 @@ void validate_configuration()
     if ( ( rift_ingress != "random" ) &&
 	 !( ingress_to_rift contains rift_ingress ) ) {
 	print( "VSR.RiftIngress: '" + rift_ingress + "' is invalid.", "red" );
+	valid = false;
+    }
+
+    // Verify we have the chosen familiar
+    if ( chosen_familiar != $familiar[ none ] &&
+	 !have_familiar( chosen_familiar ) ) {
+	print( "VSR.ChosenFamiliar: '" + chosen_familiar + "' is unavailable.", "red" );
 	valid = false;
     }
 
@@ -743,7 +759,11 @@ void prepare_for_combat()
 	return;
     }
 
-    // *** Equip an item drop familiar?
+    // If we've designated a familiar to fight with us,
+    // put it at our side.
+    if (chosen_familiar != $familiar[none] ) {
+	use_familiar( chosen_familiar );
+    }
 
     // Mazimize for items.
     string expression = "Item Drop";
@@ -972,6 +992,7 @@ void main(string parameters)
 
     // Here follows all potential adventuring in the Shadow Rift.
     string current_battle_action = get_property("battleAction");
+    familiar current_familiar = my_familiar();
     cli_execute( "checkpoint" );
     try {
 	// If we will be fighting, maximize equipment and set CCS.
@@ -1017,8 +1038,9 @@ void main(string parameters)
 	// Adventure once more to collect your reward
 	collect_reward(rift);
     } finally {
-	cli_execute( "outfit checkpoint" );
 	set_property("battleAction", current_battle_action);
+	use_familiar(current_familiar);
+	cli_execute( "outfit checkpoint" );
     }
 
     print("Done adventuring in the Shadow Rift!");
