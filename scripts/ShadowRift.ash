@@ -733,13 +733,34 @@ void platinum_yendorian_express_card()
 
 void prepare_for_combat()
 {
+    // How many turns of Shadow Affinity do we currently have?
     int affinity_turns = have_effect(SHADOW_AFFINITY);
+
+    // If we have Shadow Affinity, use PYEC to extend all effects by 5 turns.
+    if (affinity_turns > 0 && use_pyec) {
+	platinum_yendorian_express_card();
+	affinity_turns = have_effect(SHADOW_AFFINITY);
+    }
+
+    // How many turns until we hit the NC?
+    int turns_until_nc = get_property("encountersUntilSRChoice").to_int();
+
+    // Will we use up a turn of Shadow Affinity during our first encounter?
+    int affinity_used =
+	// If don't have Shadow Affinity, none is used
+	affinity_turns == 0 ? 0 :
+	// If not about to hit the NC, next up is a mundane shadow monster
+	turns_until_nc > 0 ? 1 :
+	// shadow bosses use up Shadow Affinity
+	quest_goal == "entity" ? 1 :
+	// A Labyrinth of Shadows does not use up Shadow Affinity
+	0;
 
     boolean will_fight()
     {
-	// If will consume remaining turns of Shadow Affinity - and
-	// there are some to use - we will adventure and fight.
-	if (use_up_shadow_affinity && affinity_turns > 0) {
+	// If we want to consume remaining turns of Shadow Affinity -
+	// and there are some to use - we will adventure and fight.
+	if (use_up_shadow_affinity && affinity_turns > affinity_used) {
 	    return true;
 	}
 	// If we are ready to call back Rufus, no adventuring.
@@ -750,7 +771,12 @@ void prepare_for_combat()
 	if (quest_goal == "items" && buy_shadow_items) {
 	    return false;
 	}
-	// Otherwise, we will be fighting
+	// If we are about to encounter the NC, the shadow boss is a
+	// fight but the Labyrinth of Shadows is not a fight.
+	if (turns_until_nc == 0) {
+	    return quest_goal == "entity";
+	}
+	// Otherwise, we will be fighting a mundane shadow monster
 	return true;
     }
 
@@ -783,7 +809,7 @@ void prepare_for_combat()
 
     // If we are using free turns, get Steely-Eyed Squint,
     // which doubles Item Drop bonuses for one turn.
-    if (affinity_turns > 0 && cast_steely_eyed_squint) {
+    if (affinity_turns > affinity_used && cast_steely_eyed_squint) {
 	if (have_skill(STEELY_EYED_SQUINT) &&
 	    !get_property("_steelyEyedSquintUsed").to_boolean()) {
 	    use_skill(1, STEELY_EYED_SQUINT);
@@ -792,27 +818,17 @@ void prepare_for_combat()
 
     // If we are using free turns, get Bend Hell, which doubles
     // Elemental damage and spell damage bonuses for one turn.
-    if (affinity_turns > 0 && cast_bend_hell) {
+    if (affinity_turns > affinity_used && cast_bend_hell) {
 	if (have_skill(BEND_HELL) &&
 	    !get_property("_bendHellUsed").to_boolean()) {
 	    use_skill(1, BEND_HELL);
 	}
     }
 
-    // If we are using free turns, use PYEC to extend all effects by 5 turns.
-    if (affinity_turns > 0 && use_pyec) {
-	platinum_yendorian_express_card();
-    }
-
     // If you want to use ShadowRiftConsult, tell KoLmafia to do so
     if (use_consult_script) {
 	set_property("battleAction", "consult ShadowRiftConsult.ash");
     }
-}
-
-void call_rufus()
-{
-    visit_url("inv_use.php?&whichitem=" + PAY_PHONE.to_int() + "&pwd");
 }
 
 void adventure_once(ShadowRift rift)
@@ -838,42 +854,41 @@ void adventure_once(ShadowRift rift)
 
 void prepare_for_boss()
 {
-    if (quest_goal == "entity") {
-	// Restore to 100% HP to avoid insta-kill from the shadow scythe
-	restore_hp(my_maxhp() - my_hp());
+    // Restore to 100% HP to avoid insta-kill from the shadow scythe
+    restore_hp(my_maxhp() - my_hp());
 
-	switch (get_property("rufusQuestTarget")) {
-	case "shadow cauldron":
-	    // Always loses initiative
-	    // Physical Resistance: 100%
-	    // Passive hot damage
-	    break;
-	case "shadow matrix":
-	    // Initiative: 1000
-	    // Physical Resistance: 100%
-	    // Blocks physical attacks
-	    break;
-	case "shadow orrery":
-	    // Always loses initiative
-	    // Physical Resistance: 100%
-	    // Reflects spells to damage you
-	    break;
-	case "shadow scythe":
-	    // Always wins initiative
-	    // Physical Resistance: 100%
-	    // Hits for 90%  of your Max HP every round
-	    break;
-	case "shadow spire":
-	    // Always loses initiative
-	    // Physical Resistance: 100%
-	    // Hits for 30-35%  of your Max HP every round
-	    break;
-	case "shadow tongue":
-	    // Initiative: 200
-	    // Physical Resistance: 100%
-	    // Passive sleaze damage
-	    break;
-	}
+    switch (get_property("rufusQuestTarget")) {
+    case "shadow cauldron":
+	// Always loses initiative
+	// Physical Resistance: 100%
+	// Passive hot damage
+	break;
+    case "shadow matrix":
+	// Initiative: 1000
+	// Physical Resistance: 100%
+	// Blocks physical attacks
+	break;
+    case "shadow orrery":
+	// Always loses initiative
+	// Physical Resistance: 100%
+	// Enhanced Elemental Resistance
+	// Reflects spells to damage you
+	break;
+    case "shadow scythe":
+	// Always wins initiative
+	// Physical Resistance: 100%
+	// Hits for 90%  of your Max HP every round
+	break;
+    case "shadow spire":
+	// Always loses initiative
+	// Physical Resistance: 100%
+	// Hits for 30-35%  of your Max HP every round
+	break;
+    case "shadow tongue":
+	// Initiative: 200
+	// Physical Resistance: 100%
+	// Passive sleaze damage
+	break;
     }
 }
 
@@ -910,11 +925,48 @@ void fulfill_quest(ShadowRift rift)
 	adventure_once(rift);
     }
 
-    prepare_for_boss();
+    if (quest_goal == "entity") {
+	prepare_for_boss();
+    }
 
     if (get_property("questRufus") != "step1") {
 	// Fight the boss or traverse the Shadow Labyrinth
 	adventure_once(rift);
+    }
+}
+
+void call_rufus()
+{
+    visit_url("inv_use.php?&whichitem=" + PAY_PHONE.to_int() + "&pwd");
+}
+
+void accept_quest()
+{
+    // Sanity check: Time to Call Rufus and start a quest
+    if (get_property("questRufus") != "unstarted") {
+	return;
+    }
+
+    call_rufus();
+    run_choice(rufus_option[quest_goal]);
+    print("You accepted an '" + get_property("rufusQuestType") + "' quest to get " + get_property("rufusQuestTarget"));
+}
+
+void fulfill_quest()
+{
+    // Sanity check: Time to Call Back Rufus
+    if (get_property("questRufus") != "step1") {
+	return;
+    }
+
+    // Report success and get lodestone
+    call_rufus();
+    run_choice(1);
+
+    // You should now have Rufus's shadow lodestone
+    int lodestones = item_amount(SHADOW_LODESTONE);
+    if (lodestones == 0 ) {
+	abort("You didn't get a shadow lodestone!");
     }
 }
 
@@ -985,9 +1037,7 @@ void main(string parameters)
 
     if (get_property("questRufus") == "unstarted") {
 	// Accept a quest from Rufus.
-	call_rufus();
-	run_choice(rufus_option[quest_goal]);
-	print("You accepted an '" + get_property("rufusQuestType") + "' quest to get " + get_property("rufusQuestTarget"));
+	accept_quest();
     }
 
     // Here follows all potential adventuring in the Shadow Rift.
@@ -1020,20 +1070,37 @@ void main(string parameters)
 	// If we have left over turns of Shadow Affinity, use them up by
 	// adventuring in our selected Shadow Rift.
 	if (use_up_shadow_affinity) {
-	    while (have_effect(SHADOW_AFFINITY) > 0) {
+	    // See how many turn of Shadow Affinity we have available.
+	    // Perhaps we have enough to do another quest?
+	    int affinity_turns = have_effect(SHADOW_AFFINITY);
+
+	    // Do not accept another "items" quest; we do not want to
+	    // buy items and turn them in ad infinitum.
+	    if (quest_goal != "items") {
+		while (affinity_turns >= 10) {
+		    // Call back Rufus and collect reward
+		    fulfill_quest();
+		    collect_reward(rift);
+
+		    // Accept a new quest
+		    accept_quest();
+
+		    // Adventure!
+		    prepare_for_combat();
+		    fulfill_quest(rift);
+
+		    affinity_turns = have_effect(SHADOW_AFFINITY);
+		}
+	    }
+
+	    // We may still have turns of Shadow Affinity to consume
+	    while (affinity_turns-- > 0) {
 		adventure_once(rift);
 	    }
 	}
 
 	// Fulfill the quest with Rufus
-	call_rufus();
-	run_choice(1);
-
-	// You should now have Rufus's shadow lodestone
-	int lodestones = item_amount(SHADOW_LODESTONE);
-	if (lodestones == 0 ) {
-	    abort("You didn't get a shadow lodestone!");
-	}
+	fulfill_quest();
 
 	// Adventure once more to collect your reward
 	collect_reward(rift);
