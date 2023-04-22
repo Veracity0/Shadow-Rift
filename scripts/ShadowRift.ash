@@ -146,6 +146,24 @@ boolean use_consult_script = define_property( "VSR.UseShadowRiftConsult", "boole
 
 boolean use_space_tourist_phaser = define_property( "VSR.UseSpaceTouristPhaser", "boolean", "false" ).to_boolean();
 
+// Should we equip a Jurassic Parka?
+//
+// This is always a strong choice, since it blocks the first attack against you,
+// allowing an extra round of prep. The best Item Drop shirt currently gives +25.
+//
+// The parka also has a mode that gives you 5 uses of a combat skill that
+// forces an NC next adventure. More NCs means more quests.
+//
+// none                 Do not equip a parka.
+// hp                   Use kachungasaur mode, which grants Maximum HP +100
+// spikes               Use spikolodon mode, which grants the combat skill
+//                      It also increases Monster Level by 3 per level, max +33.
+//                      That means more XP, but harder fights.
+// both                 Use spikolodon mode for normal shadow monsters
+//                      and kachungasaur mode for shadow bosses.
+
+string use_jurassic_parka = define_property( "VSR.UseJurassicParka", "string", "both" );
+
 // Should we cast Steely-Eyed Squint to double item drops from shadow monster combats?
 //
 // This is usable once a day and lasts for a single round. Since item
@@ -274,7 +292,8 @@ string rift_items(ShadowRift rift)
 
 static item PAY_PHONE = $item[closed-circuit pay phone];
 static item SHADOW_LODESTONE = $item[Rufus's shadow lodestone];
-static item DRUNKULA_WINE_GLASS = $item[Drunkula's wineglass];
+static item DRUNKULA = $item[Drunkula's wineglass];
+static item PARKA = $item[Jurassic Parka];
 static item PYEC = $item[Platinum Yendorian Express Card];
 static item SPACE_TOURIST_PHASER = $item[Space Tourist Phaser];
 static effect SHADOW_AFFINITY = $effect[Shadow Affinity];
@@ -339,6 +358,13 @@ static string_set shadow_item_options = $strings[
     venom,
 ];
 
+static string_set parka_options = $strings[
+    none,
+    hp,
+    spikes,
+    both,
+];
+
 void validate_configuration()
 {
     boolean valid = true;
@@ -367,6 +393,11 @@ void validate_configuration()
 	valid = false;
     }
 
+    if ( !( parka_options contains use_jurassic_parka ) ) {
+	print( "VSR.UseJurassicParka: '" + use_jurassic_parka + "' is invalid.", "red" );
+	valid = false;
+    }
+
     // Verify we have the chosen familiar
     if ( chosen_familiar != $familiar[ none ] &&
 	 !have_familiar( chosen_familiar ) ) {
@@ -387,13 +418,18 @@ void validate_configuration()
 
 // We can adventure if overdrunk if we have (and can equip) Drunkula's wineglass.
 boolean overdrunk = my_inebriety() > inebriety_limit();
-boolean have_wineglass = (available_amount(DRUNKULA_WINE_GLASS) > 0 &&
-			  can_equip(DRUNKULA_WINE_GLASS));
+boolean have_wineglass = (available_amount(DRUNKULA) > 0 && can_equip(DRUNKULA));
 if (overdrunk) {
     // Drunkula's wineglass disallows combat skills, spells, and items,
     // forcing you to attack. This weapon converts physical attacks to
     // elemental, bypassing shadow monster 100% physical resistance.
     use_space_tourist_phaser = true;
+}
+
+// We can equip a Jurassic Parka only if we actually own one.
+boolean have_parka = (available_amount(PARKA) > 0 && can_equip(PARKA));
+if (!have_parka) {
+    use_jurassic_parka = "none";
 }
 
 void print_help()
@@ -805,7 +841,25 @@ void prepare_for_combat()
 	expression += " +equip Space Tourist Phaser";
     }
 
+    // If the user wants to wear a Jurassic Parka
+    if (use_jurassic_parka != "none") {
+	expression += " +equip Jurassic Parka";
+    }
+
     maximize(expression, false);
+
+    // If we equipped a Jurassic Parka, set the desired mode
+    if (have_equipped(PARKA)) {
+	string mode =
+	    use_jurassic_parka == "spikes" ?
+	    "spikolodon" :
+	    use_jurassic_parka == "hp" ?
+	    "kachungasaur" :
+	    use_jurassic_parka == "both" ?
+	    (turns_until_nc == 0 ? "kachungasaur" : "spikolodon") :
+	    "kachungasaur";
+	cli_execute("parka " + mode);
+    }
 
     // If we are using free turns, get Steely-Eyed Squint,
     // which doubles Item Drop bonuses for one turn.
@@ -854,6 +908,11 @@ void adventure_once(ShadowRift rift)
 
 void prepare_for_boss()
 {
+    // If we want to have Jurassic Parka in kachungasaur mode for bosses, make it so.
+    if (use_jurassic_parka == "both" & get_property("parkaMode") != "kachungasaur") {
+	cli_execute("parka kachungasaur");
+    }
+
     // Restore to 100% HP to avoid insta-kill from the shadow scythe
     restore_hp(my_maxhp() - my_hp());
 
@@ -979,11 +1038,11 @@ void collect_reward(ShadowRift rift)
     set_property("choiceAdventure1500", reward_option[reward]);
 
     // You still need a wineglass to collect a reward if overdrunk.
-    boolean checkpoint = overdrunk && !have_equipped(DRUNKULA_WINE_GLASS);
+    boolean checkpoint = overdrunk && !have_equipped(DRUNKULA);
     try {
 	if (checkpoint) {
 	    cli_execute( "checkpoint" );
-	    equip(DRUNKULA_WINE_GLASS);
+	    equip(DRUNKULA);
 	}
 	adventure_once(rift);
     } finally {
@@ -1051,7 +1110,7 @@ void main(string parameters)
 	// We already checked that Drunkula's wineglass is available.
 	// You need it to enter a Shadow Rift, even if no combat.
 	if (overdrunk) {
-	    equip(DRUNKULA_WINE_GLASS);
+	    equip(DRUNKULA);
 	}
 
 	// If our goal is not already fulfilled, buy items or
