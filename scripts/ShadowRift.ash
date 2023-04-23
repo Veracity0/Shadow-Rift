@@ -162,7 +162,7 @@ boolean use_space_tourist_phaser = define_property( "VSR.UseSpaceTouristPhaser",
 // both                 Use spikolodon mode for normal shadow monsters
 //                      and kachungasaur mode for shadow bosses.
 
-string use_jurassic_parka = define_property( "VSR.UseJurassicParka", "string", "both" );
+string parka_mode = define_property( "VSR.UseJurassicParka", "string", "both" );
 
 // Should we cast Steely-Eyed Squint to double item drops from shadow monster combats?
 //
@@ -393,8 +393,8 @@ void validate_configuration()
 	valid = false;
     }
 
-    if ( !( parka_options contains use_jurassic_parka ) ) {
-	print( "VSR.UseJurassicParka: '" + use_jurassic_parka + "' is invalid.", "red" );
+    if ( !( parka_options contains parka_mode ) ) {
+	print( "VSR.UseJurassicParka: '" + parka_mode + "' is invalid.", "red" );
 	valid = false;
     }
 
@@ -429,7 +429,7 @@ if (overdrunk) {
 // We can equip a Jurassic Parka only if we actually own one.
 boolean have_parka = (available_amount(PARKA) > 0 && can_equip(PARKA));
 if (!have_parka) {
-    use_jurassic_parka = "none";
+    parka_mode = "none";
 }
 
 void print_help()
@@ -627,16 +627,44 @@ void parse_parameters(string parameters)
     print( "Cool, cool." );
 }
 
+int get_quest_turns()
+{
+    // It normally takes 10 turns of affinity to complete a quest:
+    // 10 shadow monster combats (each burning affinity)
+    // artifact: Shadow Labyrinth (no turns, no affinity)
+    // entity: shadow boss (no turns, burns 1 affinity)
+    //
+    // Since the labyring or boss are both free, we can visit them
+    // even if affinity had just run out.
+    int turns = 10;
+
+    // If we are using spikes, a quest requires 1 turn:
+    // 1 shadow monster combat (burning affinity)
+    // labyrinth or boss (no turns, burning 0 or 1 affinity)
+    if ( (parka_mode == "spikes" || parka_mode == "both") &&
+	 get_property("_spikolodonSpikeUses").to_int() < 5) {
+	turns = 1;
+    }
+
+    return turns;
+}
+
+int turns_until_nc()
+{
+    // How many turns to complete a quest?
+    int turns_for_quest = get_quest_turns();
+
+    // How soon will the labyrinth or boss appear? (If you burned
+    // affinity yesterday, you effectively started the quest then.)
+    int turns_until_choice = get_property("encountersUntilSRChoice").to_int();
+
+    return min(turns_for_quest, turns_until_choice);
+}
+
 boolean confirmed_free_adventures()
 {
     // If don't care if turns are free, ok
     if (!free_turns_only) {
-	return true;
-    }
-
-    // If we haven't gotten Shadow Affinity today, accepting a quest
-    // gives us 11 free turns.
-    if (!get_property("_shadowAffinityToday").to_boolean()) {
 	return true;
     }
 
@@ -650,21 +678,32 @@ boolean confirmed_free_adventures()
 	return true;
     }
 
+    // If we haven't gotten Shadow Affinity today, accepting a quest gives
+    // us 11 free turns, which is enough for an artifact or entity quest.
+    //
+    // Caveat: we cannot predict how long adventuring for items will take.
+    // Hope for the best.
+    if (!get_property("_shadowAffinityToday").to_boolean()) {
+	return true;
+    }
+
     // We already got Shadow Affinity today and we will be adventuring.
+
+    // How many turns of affinity are needed to get to the next NC?
+    int needed = turns_until_nc();
+
     // Do we have any left?
     int affinity_turns = have_effect(SHADOW_AFFINITY);
 
-    // How soon will the labyrinth or boss appear?
-    int turns_until_choice = get_property("encountersUntilSRChoice").to_int();
-
-    // Both of those encounters are free, hence ">=" rather than ">"
-    if (affinity_turns >= turns_until_choice) {
+    // A shadow boss and the Labyrinth of Shadows are both free turns,
+    // hence ">=" rather than ">"
+    if (affinity_turns >= needed) {
 	return true;
     }
 
     string message =
 	"You have " + affinity_turns + " of Shadow Affinity (and can't get any more today). " +
-	"The labyrinth or shadow boss will arrive in " + turns_until_choice + " turns. " +
+	"The labyrinth or shadow boss will arrive in " + needed + " turns. " +
 	"Are you sure you want to use non-free turns to fulfill a quest for Rufus?";
     return user_confirm(message);
 }
@@ -779,7 +818,7 @@ void prepare_for_combat()
     }
 
     // How many turns until we hit the NC?
-    int turns_until_nc = get_property("encountersUntilSRChoice").to_int();
+    int turns_until_nc = turns_until_nc();
 
     // Will we use up a turn of Shadow Affinity during our first encounter?
     int affinity_used =
@@ -842,7 +881,7 @@ void prepare_for_combat()
     }
 
     // If the user wants to wear a Jurassic Parka
-    if (use_jurassic_parka != "none") {
+    if (parka_mode != "none") {
 	expression += " +equip Jurassic Parka";
     }
 
@@ -851,11 +890,11 @@ void prepare_for_combat()
     // If we equipped a Jurassic Parka, set the desired mode
     if (have_equipped(PARKA)) {
 	string mode =
-	    use_jurassic_parka == "spikes" ?
+	    parka_mode == "spikes" ?
 	    "spikolodon" :
-	    use_jurassic_parka == "hp" ?
+	    parka_mode == "hp" ?
 	    "kachungasaur" :
-	    use_jurassic_parka == "both" ?
+	    parka_mode == "both" ?
 	    (turns_until_nc == 0 ? "kachungasaur" : "spikolodon") :
 	    "kachungasaur";
 	cli_execute("parka " + mode);
@@ -909,7 +948,7 @@ void adventure_once(ShadowRift rift)
 void prepare_for_boss()
 {
     // If we want to have Jurassic Parka in kachungasaur mode for bosses, make it so.
-    if (use_jurassic_parka == "both" & get_property("parkaMode") != "kachungasaur") {
+    if (parka_mode == "both" & get_property("parkaMode") != "kachungasaur") {
 	cli_execute("parka kachungasaur");
     }
 
@@ -1094,16 +1133,13 @@ void main(string parameters)
     print("You will find the following items there: " + rift_items(rift));
     print("After fulfilling Rufus's quest, you " + (!use_up_shadow_affinity ? "do not" : "") + " want to use up any remaining daily free fights.");
 
-    if (get_property("questRufus") == "unstarted") {
-	// Accept a quest from Rufus.
-	accept_quest();
-    }
+    void execute_quest()
+    {
+	if (get_property("questRufus") == "unstarted") {
+	    // Accept a quest from Rufus.
+	    accept_quest();
+	}
 
-    // Here follows all potential adventuring in the Shadow Rift.
-    string current_battle_action = get_property("battleAction");
-    familiar current_familiar = my_familiar();
-    cli_execute( "checkpoint" );
-    try {
 	// If we will be fighting, maximize equipment and set CCS.
 	prepare_for_combat();
 
@@ -1126,43 +1162,61 @@ void main(string parameters)
 	    abort("Could not fulfill Rufus's quest.");
 	}
 
-	// If we have left over turns of Shadow Affinity, use them up by
-	// adventuring in our selected Shadow Rift.
-	if (use_up_shadow_affinity) {
-	    // See how many turn of Shadow Affinity we have available.
-	    // Perhaps we have enough to do another quest?
-	    int affinity_turns = have_effect(SHADOW_AFFINITY);
-
-	    // Do not accept another "items" quest; we do not want to
-	    // buy items and turn them in ad infinitum.
-	    if (quest_goal != "items") {
-		while (affinity_turns >= 10) {
-		    // Call back Rufus and collect reward
-		    fulfill_quest();
-		    collect_reward(rift);
-
-		    // Accept a new quest
-		    accept_quest();
-
-		    // Adventure!
-		    prepare_for_combat();
-		    fulfill_quest(rift);
-
-		    affinity_turns = have_effect(SHADOW_AFFINITY);
-		}
-	    }
-
-	    // We may still have turns of Shadow Affinity to consume
-	    while (affinity_turns-- > 0) {
-		adventure_once(rift);
-	    }
-	}
-
 	// Fulfill the quest with Rufus
 	fulfill_quest();
 
 	// Adventure once more to collect your reward
 	collect_reward(rift);
+    }
+
+    boolean have_enough_affinity_for_quest(int affinity_turns)
+    {
+	// Given a particular number of turns of Shadow Affinity, do we
+	// have enough to do a quest?
+
+	// If we are buying items, it takes no turns and burns no Shadow
+	// Affinity. If we are not buying items, we cannot predict how
+	// long it will take, since it depends on item drop.
+	//
+	// Therefore, don't consider items quests
+	if (quest_goal == "items") {
+	    return false;
+	}
+
+	return affinity_turns >= get_quest_turns();
+    }
+
+    boolean have_enough_affinity_for_quest()
+    {
+	// Consider all currently available turns of Shadow Affinity
+	int affinity_turns = have_effect(SHADOW_AFFINITY);
+	return have_enough_affinity_for_quest(affinity_turns);
+    }
+
+    // Quests may or may not require combat, but in case they do,
+    // save current state so we can restore it when we finish.
+    string current_battle_action = get_property("battleAction");
+    familiar current_familiar = my_familiar();
+    cli_execute( "checkpoint" );
+
+    try {
+	// Execute the desired quest
+	execute_quest();
+
+	// If user wants to use up left over turns of Shadow Affinity,
+	// do more quests and/or adventure in our selected Shadow Rift.
+	if (use_up_shadow_affinity) {
+	    // If we have time to complete a quest, do it.
+	    while (have_enough_affinity_for_quest()) {
+		execute_quest();
+	    }
+
+	    // If we still have turns of Shadow Affinity, adventure.
+	    int affinity_turns = have_effect(SHADOW_AFFINITY);
+	    while (affinity_turns-- > 0) {
+		adventure_once(rift);
+	    }
+	}
     } finally {
 	set_property("battleAction", current_battle_action);
 	use_familiar(current_familiar);

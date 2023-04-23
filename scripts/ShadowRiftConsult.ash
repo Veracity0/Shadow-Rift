@@ -247,7 +247,7 @@ void main(int initround, monster foe, string page)
 	// skill that makes it miss or skip its first attack, you need
 	// to one-shot it. Fortunately, it has relatively few HP.
 	if (will_block) {
-	    // If our parka scared it, time to negate its resistances
+	    // If we scared it, time to negate its resistances
 	    shun();
 	}
 	slay();
