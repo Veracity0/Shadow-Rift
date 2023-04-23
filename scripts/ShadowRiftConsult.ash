@@ -107,19 +107,30 @@ if ( !combat_item.combat ) {
 // A combat skill which negates foe's physical and elemental resistances
 static skill SILENT_TREATMENT = $skill[ Silent Treatment ];
 
+// A combat skill which forces the next adventure to be an NC
+static skill LAUNCH_SPIKOLODON_SPIKES = $skill[ Launch spikolodon spikes ];
+
 // A passive skill which lets you throw two combat items at once.
 static skill FUNKSLINGING = $skill[ Ambidextrous Funkslinging ];
+
+// A passive skill which forces the first attack against you to miss
+static skill AIR_OF_MYSTERY = $skill[ Air of Mystery ];
 
 // An item which forces you to attack, rather than use skills, spells, and items.
 static item DRUNKULA = $item[ Drunkula's wineglass ];
 
+// An item which blocks the monster's first attack
+static item PARKA = $item[ Jurassic Parka ];
+
 void main(int initround, monster foe, string page)
 {
-    boolean must_attack = have_equipped( DRUNKULA );
+    boolean must_attack = have_equipped(DRUNKULA);
+    boolean will_block = have_equipped(PARKA) || have_skill(AIR_OF_MYSTERY);
     boolean no_attack = ( foe == $monster[ shadow matrix ] );
     boolean no_combat_spells = ( foe == $monster[ shadow orrery ] );
     boolean can_funksling = have_skill(FUNKSLINGING);
     boolean have_silent_treatment = have_skill(SILENT_TREATMENT);
+    boolean have_spikes = have_skill(LAUNCH_SPIKOLODON_SPIKES);
 
     // Mundane shadow monsters are worth pickpocketing
     void pickpocket()
@@ -136,6 +147,30 @@ void main(int initround, monster foe, string page)
     {
 	if ( !must_attack && have_silent_treatment ) {
 	    page = use_skill( SILENT_TREATMENT );
+	}
+    }
+
+    // If we want to force the next adventure to be an NC - the
+    // Labyrinth of Shadows or a shadow boss - launch spikes at this
+    // one.
+
+    void spikes()
+    {
+	if (have_spikes) {
+	    int turns_until_choice = get_property("encountersUntilSRChoice").to_int();
+	    // Since the counter is not decremented until AFTER this combat is done,
+	    // a value of 1 means the NC is next turn and does not need to be forced.
+	    if (turns_until_choice > 1) {
+		page = use_skill( LAUNCH_SPIKOLODON_SPIKES );
+		// You pull a ripcord on your parka. The spikolodon spikes both fly
+		// into your opponent for 35 damage and ricochet around the area,
+		// scaring away all the other fauna.
+		if (page.contains_text("The spikolodon spikes both fly")) {
+		    // The counter decrements after this combat.
+		    // This will make it 0 for the next adventure.
+		    set_property("encountersUntilSRChoice", "1");
+		}
+	    }
 	}
     }
 
@@ -202,6 +237,8 @@ void main(int initround, monster foe, string page)
 	// to steal, since the monsters are not especially dangerous.
 	pickpocket();
 	shun();
+	// Only force an NC for a regular shadow monster
+	spikes();
 	slay();
 	return;
     case $monster[ shadow scythe ]:
@@ -209,6 +246,10 @@ void main(int initround, monster foe, string page)
 	// always gets the drop, unless you have equipment or a passive
 	// skill that makes it miss or skip its first attack, you need
 	// to one-shot it. Fortunately, it has relatively few HP.
+	if (will_block) {
+	    // If we scared it, time to negate its resistances
+	    shun();
+	}
 	slay();
 	return;
     case $monster[ shadow orrery ]:

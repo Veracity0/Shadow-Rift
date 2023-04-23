@@ -129,6 +129,7 @@ Here are the configuration properties.
 | ```VSR.ChosenFamiliar``` | (familiar) or none | none | If not "none", which familiar to bring with you
 | ```VSR.ExtraMaximizerParameters``` | (string) | "" | Extra parameters to usewhen maximizing for item drop
 | ```VSR.UseShadowRiftConsult``` | true or false | true | Whether to automatically use ShadowRiftConsult for combats
+| ```VSR.UseJurassicParka``` | (string) | both | Whether to equip a Jurassic Parka before combats
 | ```VSR.UseSpaceTouristPhaser``` | true or false | false | Whether to acquire and equip Space Tourist Phaser for use in combats
 | ```VSR.CastSteelyEyedSquint``` | true or false | true | Whether to cast Steely-eyed Squint before free-only combats
 | ```VSR.CastBendHell``` | true or false | true | Whether to cast Bend Hell before free-only combats
