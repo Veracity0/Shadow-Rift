@@ -953,7 +953,7 @@ void prepare_for_boss()
     }
 
     // Restore to 100% HP to avoid insta-kill from the shadow scythe
-    restore_hp(my_maxhp() - my_hp());
+    restore_hp(my_maxhp());
 
     switch (get_property("rufusQuestTarget")) {
     case "shadow cauldron":
