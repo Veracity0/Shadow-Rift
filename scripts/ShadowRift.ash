@@ -1,3 +1,4 @@
+since r27371;
 import <vprops.ash>;
 
 // ***************************
@@ -441,10 +442,6 @@ void print_help()
     print("help - print this message");
     print("check - visit Rufus and see what he is looking for.");
     print();
-    print("KEYWORD can be 'default' to simply use all properties as configured/defaulted.");
-    print("That is normal behaviour unless you override individual properties.");
-    print("You only need this if you don't intend (need) to override anything.");
-    print();
     print("KEYWORD can override configuration properties:");
     print();
     print("What kind of quest to accept (VSR.QuestGoal):");
@@ -525,13 +522,18 @@ void check_rufus()
     }
 }
 
-void parse_parameters(string parameters)
+void parse_parameters(string... parameters)
 {
     print();
     print( "Checking arguments...." );
 
+    // Parameters are optional. Depending on how the script is invoked,
+    // there may be a single string with space-separated keywords, or
+    // multiple strings. Whichever, turn into an array of keywords.
+    string[] params = parameters.join_strings(" ").split_string(" ");
+
     boolean valid = true;
-    foreach n, keyword in parameters.split_string(" ") {
+    foreach n, keyword in params {
 	// Commands
 	switch (keyword) {
 	case "help":
@@ -540,14 +542,6 @@ void parse_parameters(string parameters)
 	case "check":
 	    check_rufus();
 	    exit;
-	case "default":
-	    // If a script's main() function has arguments, KoLmafia
-	    // will require that you provide some, and will prompt you
-	    // for them if you invoke the script without parameters.
-	    //
-	    // If you are content to run the script with properties as
-	    // configured (or defaulted), use this to skip that nag.
-	    continue;
 	}
 
 	// Keywords that match values of configuration properties
@@ -709,7 +703,7 @@ boolean confirmed_free_adventures()
 }
 
 // Forward reference
-void collect_reward(ShadowRift rift);
+void collect_reward(ShadowRift rift, int lodestones);
 
 void check_quest_state()
 {
@@ -736,7 +730,7 @@ void check_quest_state()
 	if (rift_ingress == "random") {
 	    print("We chose " + rift.loc.to_string() + " for you.");
 	}
-	collect_reward(rift);
+	collect_reward(rift, lodestones);
 	exit;
     }
 
@@ -1068,8 +1062,13 @@ void fulfill_quest()
     }
 }
 
-void collect_reward(ShadowRift rift)
+void collect_reward(ShadowRift rift, int lodestones)
 {
+    // Sanity check
+    if (lodestones == 0) {
+	return;
+    }
+
     string reward = quest_reward;
     if (reward == "forest" && get_property("_shadowForestLooted").to_boolean()) {
 	reward = "waters";
@@ -1083,7 +1082,13 @@ void collect_reward(ShadowRift rift)
 	    cli_execute( "checkpoint" );
 	    equip(DRUNKULA);
 	}
-	adventure_once(rift);
+
+	// The non-combat can be preempted by Violet Fog, at least.
+	// Repeat until a shadow lodestone has been used.
+	repeat {
+	    adventure_once(rift);
+	} until (item_amount(SHADOW_LODESTONE) < lodestones);
+
     } finally {
 	if (checkpoint) {
 	    cli_execute( "outfit checkpoint" );
@@ -1166,7 +1171,7 @@ void main(string parameters)
 	fulfill_quest();
 
 	// Adventure once more to collect your reward
-	collect_reward(rift);
+	collect_reward(rift, 1);
     }
 
     boolean have_enough_affinity_for_quest(int affinity_turns)
