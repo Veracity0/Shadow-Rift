@@ -189,11 +189,6 @@ Visit Rufus and see what chores he has in mind for you. This will print out the 
 | ```rufusDesiredArtifact``` | ```shadow bucket``` ```shadow heart``` ```shadow heptahedron``` ```shadow lighter``` ```shadow snowflake``` ```shadow wave``` |
 | ```rufusDesiredEntity``` | ```shadow cauldron``` ```shadow matrix``` ```shadow orrery``` ```shadow scythe``` ```shadow spire``` ```shadow tongue``` |
 | ```rufusDesiredItems``` | ```shadow bread``` ```shadow brick``` ```shadow flame``` ```shadow fluid``` ```shadow glass``` ```shadow ice``` ```shadow nectar``` ```shadow sausage``` ```shadow sinew``` ```shadow skin``` ```shadow stick``` ```shadow venom``` |
-```
-ShadowRift default
-```
-If an ASH script's ```main``` function has parameters, KoLmafia requires you to put them on the command line or it will pop up a prompt.
-If all of your configuration variables are acceptable as-is and you don't want to give them as command-line arguments, this avoids the prompt.
 
 Others let you override configuration preferences:
 
