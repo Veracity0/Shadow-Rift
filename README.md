@@ -220,7 +220,7 @@ In a Shadow Rift, you can encounter mundane shadow monsters (three types per rif
 ShadowRiftConsult is a consult script, so all it can do is whatever you can do in combat: steal, use combat skills, cast combat spells, use combat items, and so on.
 
 1) For mundane shadow monsters (less dangerous), if you can pickpocket, do so. Item Drops are reduced by 80% in the Shadow Rifts, but that doesn't apply to pickpocket.
-2) If you have the "Silent Treatment" skill, which negates physical and elemental resistances, cast it. (Except for the shadow scythe, which will kill you on the second round.)
+2) If you have the "Silent Treatment" skill, which negates physical and elemental resistances for non-bosses, cast it.
 3) Then repeat, doing your configured choice of action.
    - If you have a combat spell configured, cast it
    - Otherwise, attack
@@ -259,3 +259,5 @@ Shadow Rifts become a permanent part of the game, regardless of your character c
 The IOTM also allows the character to call Rufus and accept quests, as often as you please, and gain access to new content.
 
 The first such quest you accept each day grants you 11 turns of Shadow Affinity, which makes all combats in a Shadow Rift turn-free.
+
+5) May 14, 2023: Shadow Rifts fade into the darker shadows and are only available to those with a closed-circuit pay phone.

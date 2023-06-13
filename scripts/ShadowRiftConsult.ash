@@ -55,7 +55,7 @@ import <vprops.ash>;
 //
 // Silent Treatment is a skill which negates physical and elemental
 // resistances. This skill makes these combats trivial, even after a lot
-// of scaling. Caveat: you don't have time to use it on the shadow scythe.
+// of scaling. Caveat: it does not work on shadow bosses.
 //
 // Saucegeyser does a lot of elemental damage. It suffices by itself for
 // shadow monsters that have not scaled up their elemental resistance
@@ -236,6 +236,7 @@ void main(int initround, monster foe, string page)
 	// pickpocket percentage is unreduced. It is well worth trying
 	// to steal, since the monsters are not especially dangerous.
 	pickpocket();
+	// Negate resistances with Silent Treatment, if you know it.
 	shun();
 	// Only force an NC for a regular shadow monster
 	spikes();
@@ -246,16 +247,11 @@ void main(int initround, monster foe, string page)
 	// always gets the drop, unless you have equipment or a passive
 	// skill that makes it miss or skip its first attack, you need
 	// to one-shot it. Fortunately, it has relatively few HP.
-	if (will_block) {
-	    // If we scared it, time to negate its resistances
-	    shun();
-	}
 	slay();
 	return;
     case $monster[ shadow orrery ]:
 	// This boss reflects spells and has enhanced Elemental
 	// resistance. It is worth eliminating its resistances.
-	shun();
 	slay();
 	return;
     case $monster[ shadow matrix ]:
@@ -268,7 +264,6 @@ void main(int initround, monster foe, string page)
 	if (combat_spell == NO_SKILL && combat_item == NO_ITEM) {
 	    abort("The " + foe + " requires a combat spell or combat item, but neither is configured.");
 	}
-	shun();
 	slay();
 	return;
     case $monster[ shadow cauldron ]:
@@ -279,7 +274,6 @@ void main(int initround, monster foe, string page)
 	// This boss does 30-35% of your Maximum HP every time it hits
 	// you.  We have time to negate its resistances before defeating
 	// it with our combat spell.
-	shun();
 	slay();
 	return;
     }
